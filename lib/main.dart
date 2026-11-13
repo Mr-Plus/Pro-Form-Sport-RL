@@ -198,6 +198,7 @@ class _MainShellPageState extends State<MainShellPage>
   late final LiveSessionService _liveSession;
   int _selectedIndex = 0;
   Workout? _selectedWorkoutForLandscape;
+  bool _userClearedLandscapeWorkout = false;
 
   @override
   void initState() {
@@ -224,6 +225,7 @@ class _MainShellPageState extends State<MainShellPage>
 
   void _onSelectWorkout(Workout workout) {
     setState(() {
+      _userClearedLandscapeWorkout = false;
       _selectedWorkoutForLandscape = workout;
     });
     _liveSession.selectWorkout(workout);
@@ -245,18 +247,42 @@ class _MainShellPageState extends State<MainShellPage>
 
         // En orientation Paysage : affichage des données live et contrôles uniquement en plein écran
         if (isLandscape) {
+          final scheduledNext =
+              widget.appState.activeProgram?.nextScheduledSession?.workout;
+          final effectiveWorkout = _selectedWorkoutForLandscape ??
+              ((!_userClearedLandscapeWorkout && !_liveSession.isRunning)
+                  ? scheduledNext
+                  : _liveSession.selectedWorkout);
+          if (effectiveWorkout != null &&
+              !_liveSession.isRunning &&
+              _liveSession.selectedWorkout?.id != effectiveWorkout.id) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted &&
+                  !_liveSession.isRunning &&
+                  !_userClearedLandscapeWorkout) {
+                _liveSession.selectWorkout(effectiveWorkout);
+              }
+            });
+          }
           return LandscapeSessionScreen(
             appState: widget.appState,
             bleService: widget.bleService,
             voiceCoach: widget.voiceCoach,
             liveSession: _liveSession,
-            selectedWorkout: _selectedWorkoutForLandscape,
+            selectedWorkout: effectiveWorkout,
             onClearWorkout: () {
-              setState(() => _selectedWorkoutForLandscape = null);
+              setState(() {
+                _userClearedLandscapeWorkout = true;
+                _selectedWorkoutForLandscape = null;
+              });
               _liveSession.clearWorkout();
             },
             onSessionSaved: () {
-              setState(() => _selectedIndex = 2);
+              setState(() {
+                _userClearedLandscapeWorkout = false;
+                _selectedWorkoutForLandscape = null;
+                _selectedIndex = 2;
+              });
               _tabController.animateTo(2);
             },
           );
@@ -671,13 +697,17 @@ class _MainShellPageState extends State<MainShellPage>
       );
       if (mounted) {
         setState(() {
+          _userClearedLandscapeWorkout = false;
           _selectedWorkoutForLandscape = null;
           _selectedIndex = 3;
         });
         _tabController.animateTo(3);
       }
     } else if (mounted) {
-      setState(() => _selectedWorkoutForLandscape = null);
+      setState(() {
+        _userClearedLandscapeWorkout = false;
+        _selectedWorkoutForLandscape = null;
+      });
     }
     _liveSession.resetAfterSaveOrDiscard();
   }

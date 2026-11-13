@@ -92,17 +92,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       isScrollControlled: true,
       backgroundColor: AppColors.level0,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.75,
-          maxChildSize: 0.9,
+          initialChildSize: 0.78,
+          maxChildSize: 0.92,
           builder: (_, scrollCtrl) {
             return ListView(
               controller: scrollCtrl,
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
               children: [
                 Center(
                   child: Container(
@@ -114,86 +114,81 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 Text(
-                  'GUIDE DES 4 OBJECTIFS',
-                  style: AppTypography.bebasTitle(
-                    fontSize: 22,
-                  ),
+                  'GUIDE DES OBJECTIFS',
+                  style: AppTypography.h1(fontSize: 22),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Valeurs calibrées pour votre niveau (${_selectedLevel.label}). Vous pouvez ajuster votre niveau à tout moment.',
+                  'Cibles adaptées au niveau ${_selectedLevel.label}. Touchez un objectif pour le sélectionner.',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 12.5,
                     color: AppColors.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
+
+                // Encadré sobre : Cadence (SPM) & Résistance
                 Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.pastelSlateBlue,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.25),
-                    ),
-                  ),
+                  padding: const EdgeInsets.all(14),
+                  decoration: AppCards.cardDecoration(radius: 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.health_and_safety_outlined,
-                              size: 16, color: AppColors.primary),
-                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 16,
+                            color: AppColors.rosePastel,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
                             'Comprendre Cadence (SPM) & Résistance',
                             style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Text(
-                        '• SPM = coups de rame par minute (votre rythme).\n'
-                        '• Résistance (1 à 24) = la dureté du tirage.\n'
-                        '• Règle santé : ne combinez jamais résistance maximale et cadence rapide. Plus c\'est lourd, plus on rame lentement.',
+                        '• SPM : coups de rame par minute (votre rythme).\n'
+                        '• Résistance (1 à 24) : dureté du tirage à chaque coup.\n'
+                        '• Règle santé : plus la résistance est haute, plus la cadence doit rester lente pour protéger votre dos.',
                         style: TextStyle(
-                          fontSize: 11.5,
-                          color: AppColors.textPrimary,
-                          height: 1.4,
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.45,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
+
                 ...WorkoutGoal.values.map((g) {
                   final isSelected = g == _selectedGoal;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(18),
                       onTap: () {
                         setState(() => _selectedGoal = g);
                         Navigator.pop(ctx);
                       },
                       child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.pastelSlateBlue
-                              : AppColors.level1,
-                          borderRadius: BorderRadius.circular(14),
+                        padding: const EdgeInsets.all(16),
+                        decoration: AppCards.cardDecoration(
+                          radius: 18,
                           border: Border.all(
                             color: isSelected
-                                ? AppColors.primary
-                                : AppColors.level2,
-                            width: isSelected ? 2 : 1,
+                                ? AppColors.rose.withValues(alpha: 0.75)
+                                : Colors.white.withValues(alpha: 0.08),
+                            width: isSelected ? 1.5 : 1.0,
                           ),
                         ),
                         child: Column(
@@ -201,49 +196,31 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           children: [
                             Row(
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.level0,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    _getGoalIcon(g),
-                                    size: 18,
-                                    color: AppColors.primary,
-                                  ),
+                                Icon(
+                                  _getGoalIcon(g),
+                                  size: 18,
+                                  color: isSelected
+                                      ? AppColors.rosePastel
+                                      : AppColors.textSecondary,
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 10),
                                 Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        g.label,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 13.5,
-                                          color: isSelected
-                                              ? AppColors.primary
-                                              : AppColors.textPrimary,
-                                        ),
-                                      ),
-                                      Text(
-                                        g.subtitle,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ],
+                                  child: Text(
+                                    g.label,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14.5,
+                                      color: isSelected
+                                          ? AppColors.rosePastel
+                                          : AppColors.textPrimary,
+                                    ),
                                   ),
                                 ),
                                 if (isSelected)
                                   Icon(
-                                    Icons.check_circle,
-                                    color: AppColors.primary,
-                                    size: 18,
+                                    Icons.check_circle_rounded,
+                                    color: AppColors.rose,
+                                    size: 19,
                                   ),
                               ],
                             ),
@@ -251,46 +228,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             Text(
                               g.description,
                               style: TextStyle(
-                                fontSize: 11.5,
-                                color: AppColors.textPrimary,
-                                height: 1.35,
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                                height: 1.4,
                               ),
                             ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 4,
-                              children: [
-                                _buildGoalBadge(
-                                  icon: Icons.speed,
-                                  label: 'Cadence',
-                                  value: g.cadenceForLevel(_selectedLevel),
-                                  bgColor: AppColors.pastelSage,
-                                  textColor: AppColors.green,
-                                ),
-                                _buildGoalBadge(
-                                  icon: Icons.tune,
-                                  label: 'Résistance',
-                                  value: g.resistanceForLevel(_selectedLevel),
-                                  bgColor: AppColors.pastelSand,
-                                  textColor: AppColors.orange,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 12),
                             Row(
                               children: [
-                                Icon(Icons.tips_and_updates_outlined,
-                                    size: 13, color: AppColors.amber),
-                                const SizedBox(width: 5),
                                 Expanded(
-                                  child: Text(
-                                    g.beginnerTip,
-                                    style: TextStyle(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textSecondary,
-                                    ),
+                                  child: _buildSoberTarget(
+                                    label: 'Cadence',
+                                    value: g.cadenceForLevel(_selectedLevel),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildSoberTarget(
+                                    label: 'Résistance',
+                                    value: g.resistanceForLevel(_selectedLevel),
                                   ),
                                 ),
                               ],
