@@ -213,7 +213,7 @@ class _LandscapeSessionScreenState extends State<LandscapeSessionScreen> {
                                 child: _MetricBox(
                                   label: 'CADENCE',
                                   value: '${tel.cadenceSpm}',
-                                  unit: 'SPM',
+                                  unit: 'coups/min',
                                   accentColor: AppColors.purple,
                                   icon: Icons.autorenew_rounded,
                                 ),

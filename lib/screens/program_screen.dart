@@ -1,6 +1,9 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/models.dart';
+import '../services/ai_coach_service.dart';
 import '../services/app_state_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
@@ -8,11 +11,13 @@ import '../widgets/telemetry_charts.dart';
 
 class ProgramScreen extends StatefulWidget {
   final AppStateService appState;
+  final Workout? selectedWorkoutForLandscape;
   final ValueChanged<Workout> onSelectWorkoutForLandscape;
 
   const ProgramScreen({
     super.key,
     required this.appState,
+    this.selectedWorkoutForLandscape,
     required this.onSelectWorkoutForLandscape,
   });
 
@@ -21,535 +26,758 @@ class ProgramScreen extends StatefulWidget {
 }
 
 class _ProgramScreenState extends State<ProgramScreen> {
+  String? _openedProgramId;
+
+  TrainingProgram? _findProgram(String? id) {
+    if (id == null) return null;
+    for (final p in widget.appState.programs) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: widget.appState,
       builder: (context, _) {
-        final prog = widget.appState.activeProgram;
-
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.pageHorizontal,
-            AppSpacing.pageTop,
-            AppSpacing.pageHorizontal,
-            95,
-          ),
-          children: [
-            // En-tête : Titre & Action
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'PROGRAMME EN COURS',
-                    style: AppTypography.h1(fontSize: 22),
-                  ),
-                ),
-                if (prog != null)
-                  FilledButton.tonalIcon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.level1,
-                      foregroundColor: AppColors.textPrimary,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    onPressed: () => _showProgramEditorModal(context, existing: prog),
-                    icon: const Icon(Icons.tune_rounded, size: 16),
-                    label: const Text('Modifier'),
-                  )
-                else
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.rose,
-                      foregroundColor: Colors.white,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    onPressed: () => _showProgramEditorModal(context),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Créer'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.headerGap),
-
-            if (prog == null)
-              _buildEmptyState(context)
-            else ...[
-              // 1. Carte de progression du programme
-              _buildProgressCard(context, prog),
-              const SizedBox(height: AppSpacing.sectionGap),
-
-              // 2. Planning hebdomadaire des séances
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  Text(
-                    'PLANNING DES SÉANCES',
-                    style: AppTypography.h3(
-                      color: AppColors.textSecondary,
-                      fontSize: 16,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: AppCards.tagDecoration(),
-                    child: Text(
-                      '${prog.formattedDaysSummary} • ${prog.trainingTime}',
-                      style: TextStyle(
-                        color: AppColors.rosePastel,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ..._buildWeeklyScheduleWidgets(context, prog),
-            ],
-          ],
-        );
+        final opened = _findProgram(_openedProgramId);
+        if (opened != null) {
+          return _buildProgramDetail(context, opened);
+        }
+        return _buildProgramsList(context);
       },
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
+  // ===========================================================================
+  // 1. LISTE DES PROGRAMMES
+  // ===========================================================================
+
+  Widget _buildProgramsList(BuildContext context) {
+    final programs = widget.appState.programs;
+    final activeId = widget.appState.activeProgram?.id;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pageHorizontal,
+        AppSpacing.pageTop,
+        AppSpacing.pageHorizontal,
+        95,
+      ),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                'MES PROGRAMMES',
+                style: AppTypography.h1(fontSize: 22),
+              ),
+            ),
+            FilledButton.icon(
+              style: AppButtons.compact(),
+              onPressed: () => _showCreateOrEditProgramModal(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Nouveau'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.headerGap),
+        if (programs.isEmpty)
+          _buildEmptyProgramsState(context)
+        else
+          ...programs.map((prog) {
+            final isActive = prog.id == activeId;
+            final pct = prog.progressPercent;
+            final done = prog.completedWorkoutIds.length;
+            final total = prog.workouts.length;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: AppCards.cardDecoration(
+                radius: AppSpacing.cardRadius,
+                border: isActive
+                    ? Border.all(
+                        color: AppColors.rose.withValues(alpha: 0.7),
+                        width: 1.5,
+                      )
+                    : null,
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                onTap: () => setState(() => _openedProgramId = prog.id),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    prog.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.h2(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ),
+                                if (isActive) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: AppCards.tagDecoration(),
+                                    child: Text(
+                                      'ACTIF',
+                                      style: TextStyle(
+                                        color: AppColors.rosePastel,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$pct%',
+                            style: AppTypography.metric(
+                              color: AppColors.rose,
+                              fontSize: 22,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: prog.progressRatio,
+                          minHeight: 7,
+                          backgroundColor: AppColors.level2,
+                          color: AppColors.rose,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '$done/$total séances • ${prog.formattedDaysSummary} à ${prog.trainingTime}',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: isActive
+                                ? 'Programme actif'
+                                : 'Sélectionner ce programme',
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(
+                              isActive
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              size: 22,
+                              color: isActive
+                                  ? AppColors.rose
+                                  : AppColors.textSecondary,
+                            ),
+                            onPressed: () =>
+                                widget.appState.setActiveProgram(prog.id),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  Widget _buildEmptyProgramsState(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
       decoration: AppCards.cardDecoration(radius: AppSpacing.cardRadius),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.rose.withValues(alpha: 0.15),
-            ),
-            child: Icon(
-              Icons.calendar_month_rounded,
-              size: 44,
-              color: AppColors.rose,
-            ),
+          Icon(
+            Icons.calendar_month_rounded,
+            size: 46,
+            color: AppColors.rose,
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           Text(
-            'AUCUN PROGRAMME EN COURS',
+            'AUCUN PROGRAMME',
             style: AppTypography.h2(
               color: AppColors.textPrimary,
               fontSize: 20,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
-            'Choisissez votre objectif, le nombre de semaines et vos jours d\'entraînement pour structurer vos séances avec votre rameur.',
+            'Créez un programme, nommez-le, puis glissez-déposez vos séances pour construire votre calendrier.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13.5,
-              height: 1.5,
+              height: 1.45,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.rose,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+            style: AppButtons.primary(),
+            onPressed: () => _showCreateOrEditProgramModal(context),
+            icon: const Icon(Icons.add, size: 19),
+            label: const Text('Créer un programme'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // 2. DÉTAIL D'UN PROGRAMME (CALENDRIER + 8 MODÈLES GLISSER-DÉPOSER)
+  // ===========================================================================
+
+  Widget _buildProgramDetail(BuildContext context, TrainingProgram prog) {
+    final schedule = prog.buildSchedule();
+    final nextSession = prog.nextScheduledSession;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pageHorizontal,
+        12,
+        AppSpacing.pageHorizontal,
+        95,
+      ),
+      children: [
+        // En-tête retour + titre + réglages
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Retour aux programmes',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => _openedProgramId = null),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    prog.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.h2(
+                      color: AppColors.textPrimary,
+                      fontSize: 19,
+                    ),
+                  ),
+                  Text(
+                    '${prog.progressPercent}% • ${prog.formattedDaysSummary} à ${prog.trainingTime}',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Paramètres du programme',
+              visualDensity: VisualDensity.compact,
+              onPressed: () =>
+                  _showCreateOrEditProgramModal(context, existing: prog),
+              icon: const Icon(Icons.tune_rounded, size: 20),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        // Prochaine séance mise en avant
+        if (nextSession != null && !nextSession.isCompleted) ...[
+          _buildNextSessionBanner(context, nextSession),
+          const SizedBox(height: 16),
+        ],
+
+        // Calendrier des séances
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'CALENDRIER (${schedule.length} SÉANCES)',
+                style: AppTypography.bebasSection(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            FilledButton.icon(
+              style: AppButtons.compact(),
+              onPressed: () => _showTemplatePickerSheet(context, prog),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Ajouter'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+
+        if (schedule.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 28,
+            ),
+            decoration: AppCards.subCardDecoration(radius: 16),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.event_note_rounded,
+                  color: AppColors.textMuted,
+                  size: 30,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Aucune séance planifiée.\nTouchez "+ Ajouter" pour choisir un modèle de séance.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: schedule.length,
+            onReorderItem: (oldIndex, newIndex) =>
+                _reorderWorkout(prog, oldIndex, newIndex),
+            itemBuilder: (context, idx) {
+              final item = schedule[idx];
+              final isNext =
+                  nextSession?.id == item.id && !item.isCompleted;
+              return _buildScheduledSessionRow(
+                context,
+                prog,
+                item,
+                idx,
+                isNext: isNext,
+              );
+            },
+          ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.red,
+              side: BorderSide(color: AppColors.red.withValues(alpha: 0.45)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            onPressed: () => _showProgramEditorModal(context),
-            icon: const Icon(Icons.add),
+            onPressed: () => _confirmDeleteProgram(context, prog),
+            icon: const Icon(Icons.delete_outline, size: 19),
             label: const Text(
-              'Créer mon programme',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              'Supprimer le programme',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressCard(BuildContext context, TrainingProgram prog) {
-    final pct = prog.progressPercent;
-    final doneCount = prog.completedWorkoutIds.length;
-    final totalCount = prog.workouts.length;
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: AppCards.cardDecoration(radius: AppSpacing.cardRadius),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      prog.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.h2(
-                        color: AppColors.textPrimary,
-                        fontSize: 20,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${prog.goal.label} • ${prog.weeksCount} sem. • ${prog.sessionsPerWeek} séances/sem.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '$pct%',
-                style: AppTypography.metric(
-                  color: AppColors.rose,
-                  fontSize: 34,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: prog.progressRatio,
-              minHeight: 8,
-              backgroundColor: AppColors.level2,
-              color: AppColors.rose,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              Text(
-                '$doneCount sur $totalCount séances validées',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (prog.notificationsEnabled)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.notifications_active_outlined,
-                      size: 14,
-                      color: AppColors.rose,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Rappel ${prog.trainingTime}',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildWeeklyScheduleWidgets(
-    BuildContext context,
-    TrainingProgram prog,
-  ) {
-    final schedule = prog.buildSchedule();
-    final widgets = <Widget>[];
-
-    for (int w = 1; w <= prog.weeksCount; w++) {
-      final weekSessions = schedule.where((s) => s.weekNumber == w).toList();
-      if (weekSessions.isEmpty) continue;
-
-      final doneInWeek = weekSessions.where((s) => s.isCompleted).length;
-
-      widgets.add(
-        Container(
-          margin: const EdgeInsets.only(bottom: AppSpacing.cardGap),
-          padding: const EdgeInsets.all(AppSpacing.cardPadding),
-          decoration: AppCards.cardDecoration(radius: AppSpacing.cardRadius),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'SEMAINE $w',
-                      style: AppTypography.h3(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '$doneInWeek / ${weekSessions.length} terminées',
-                    style: TextStyle(
-                      color: doneInWeek == weekSessions.length
-                          ? AppColors.green
-                          : AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              ...weekSessions.map((item) {
-                final dateStr =
-                    DateFormat('dd/MM').format(item.scheduledDateTime);
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: AppCards.subCardDecoration(
-                    radius: AppSpacing.innerRadius,
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(AppSpacing.innerRadius),
-                    onTap: () => _showWorkoutDetailsModal(context, item.workout),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        children: [
-                          // Checkbox : coche la session spécifique item.id
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            icon: Icon(
-                              item.isCompleted
-                                  ? Icons.check_circle_rounded
-                                  : Icons.radio_button_unchecked_rounded,
-                              color: item.isCompleted
-                                  ? AppColors.green
-                                  : AppColors.textMuted,
-                              size: 24,
-                            ),
-                            onPressed: () {
-                              widget.appState
-                                  .toggleWorkoutCompletionInActiveProgram(item.id);
-                            },
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${item.weekdayLabel} $dateStr • ${item.trainingTime}',
-                                  style: TextStyle(
-                                    color: AppColors.rose,
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  item.workout.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    decoration: item.isCompleted
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                  ),
-                                ),
-                                Text(
-                                  '${item.workout.formattedDuration} • ${item.workout.steps.length} blocs • SMR max ${item.workout.maxResistance}/24',
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 11.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            size: 20,
-                            color: AppColors.textMuted,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ],
           ),
         ),
-      );
-    }
-
-    return widgets;
+      ],
+    );
   }
 
-  // --- Modal Détails de Séance (au clic sur une séance du programme) ---
+  Widget _buildNextSessionBanner(
+    BuildContext context,
+    ScheduledProgramSession next,
+  ) {
+    final dateLabel = _formatSessionDate(next.scheduledDateTime);
 
-  void _showWorkoutDetailsModal(BuildContext context, Workout workout) {
-    showModalBottomSheet(
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: AppCards.cardDecoration(
+        radius: 16,
+        border: Border.all(
+          color: AppColors.rose.withValues(alpha: 0.7),
+          width: 1.4,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: AppCards.tagDecoration(),
+            child: Icon(
+              Icons.event_available_rounded,
+              color: AppColors.rosePastel,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'PROCHAINE SÉANCE',
+                  style: TextStyle(
+                    color: AppColors.rosePastel,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  dateLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduledSessionRow(
+    BuildContext context,
+    TrainingProgram prog,
+    ScheduledProgramSession item,
+    int index, {
+    required bool isNext,
+  }) {
+    final wk = item.workout;
+    final minRes = wk.steps.isEmpty
+        ? 1
+        : wk.steps.map((s) => s.targetResistance).reduce(min);
+    final maxRes = wk.steps.isEmpty
+        ? 1
+        : wk.steps.map((s) => s.targetResistance).reduce(max);
+    final dateLabel = _formatSessionDate(item.scheduledDateTime);
+
+    return Container(
+      key: ValueKey('${wk.id}_$index'),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: AppCards.subCardDecoration(
+        radius: 14,
+        border: isNext
+            ? Border.all(
+                color: AppColors.rose.withValues(alpha: 0.65),
+                width: 1.2,
+              )
+            : null,
+      ),
+      child: Row(
+        children: [
+          ReorderableDragStartListener(
+            index: index,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(
+                Icons.drag_indicator_rounded,
+                size: 20,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => widget.appState.toggleWorkoutCompletionInProgram(
+              prog.id,
+              wk.id,
+              legacySessionKey: item.id,
+            ),
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: item.isCompleted ? AppColors.rose : AppColors.level2,
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(
+                  color: item.isCompleted
+                      ? AppColors.rose
+                      : AppColors.textMuted.withValues(alpha: 0.4),
+                ),
+              ),
+              child: item.isCompleted
+                  ? const Icon(Icons.check, size: 15, color: Colors.white)
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      dateLabel,
+                      style: TextStyle(
+                        color: isNext
+                            ? AppColors.rosePastel
+                            : AppColors.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (isNext) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        '• PROCHAINE',
+                        style: TextStyle(
+                          color: AppColors.rose,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _cleanWorkoutTitle(wk.title),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    decoration:
+                        item.isCompleted ? TextDecoration.lineThrough : null,
+                    color: item.isCompleted
+                        ? AppColors.textMuted
+                        : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${wk.formattedDuration} • SMR $minRes–$maxRes',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Modifier la séance',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _showEditWorkoutModal(context, prog, index, wk),
+            icon: Icon(
+              Icons.edit_outlined,
+              size: 19,
+              color: AppColors.rosePastel,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Supprimer du programme',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _removeWorkoutFromProgram(prog, index),
+            icon: Icon(
+              Icons.delete_outline,
+              size: 19,
+              color: AppColors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // ACTIONS & MODALES
+  // ===========================================================================
+
+  void _launchWorkout(BuildContext context, Workout wk) {
+    widget.onSelectWorkoutForLandscape(wk);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Séance "${wk.title}" prête ! Passez en mode paysage pour démarrer.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reorderWorkout(
+    TrainingProgram prog,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final list = List<Workout>.from(prog.workouts);
+    final moved = list.removeAt(oldIndex);
+    list.insert(newIndex, moved);
+
+    final updated = prog.copyWith(workouts: list);
+    await widget.appState.saveProgram(updated);
+  }
+
+  Future<void> _removeWorkoutFromProgram(
+    TrainingProgram prog,
+    int index,
+  ) async {
+    final list = List<Workout>.from(prog.workouts);
+    final removed = list.removeAt(index);
+    final updatedCompleted = List<String>.from(prog.completedWorkoutIds)
+      ..remove(removed.id);
+
+    final updated = prog.copyWith(
+      workouts: list,
+      completedWorkoutIds: updatedCompleted,
+    );
+    await widget.appState.saveProgram(updated);
+  }
+
+  void _confirmDeleteProgram(BuildContext context, TrainingProgram prog) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer le programme ?'),
+        content: Text(
+          'Attention : cette action est irréversible. Voulez-vous vraiment supprimer "${prog.title}" et tout son calendrier ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await widget.appState.deleteProgram(prog.id);
+              if (_openedProgramId == prog.id && mounted) {
+                setState(() => _openedProgramId = null);
+              }
+            },
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTemplatePickerSheet(BuildContext context, TrainingProgram prog) {
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.level0,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (ctx) => DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.78,
-        maxChildSize: 0.94,
+        maxChildSize: 0.92,
         minChildSize: 0.5,
         builder: (context, scrollCtrl) => ListView(
           controller: scrollCtrl,
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    workout.title,
-                    style: AppTypography.h1(fontSize: 22),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
             Text(
-              workout.description,
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                height: 1.4,
+              'CHOISIR UN MODÈLE DE SÉANCE',
+              style: AppTypography.h2(
+                color: AppColors.textPrimary,
+                fontSize: 18,
               ),
             ),
-            const SizedBox(height: 16),
-            // Badges durée, blocs, résistance
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildModalBadge(Icons.timer_outlined, workout.formattedDuration),
-                _buildModalBadge(Icons.view_week_outlined, '${workout.steps.length} blocs'),
-                _buildModalBadge(Icons.speed, 'SMR max ${workout.maxResistance}/24'),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'PROFIL DE RÉSISTANCE',
-              style: AppTypography.h3(
-                color: AppColors.textSecondary,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: AppCards.cardDecoration(radius: 18),
-              child: WorkoutResistanceProfileChart(
-                steps: workout.steps,
-                height: 80,
-              ),
-            ),
-            const SizedBox(height: 22),
-            Text(
-              'DÉTAIL DES INTERVALLES',
-              style: AppTypography.h3(
-                color: AppColors.textSecondary,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 10),
-            ...workout.steps.map((s) => Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: AppCards.subCardDecoration(radius: 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: stepTypeColor(s.type),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      s.title,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${s.durationSeconds}s @ SMR ${s.targetResistance}',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            )),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.rose,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
+            const SizedBox(height: 14),
+            ...WorkoutTemplateType.values.map(
+              (tpl) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: AppCards.subCardDecoration(radius: 14),
+                child: InkWell(
                   borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                widget.onSelectWorkoutForLandscape(workout);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Séance "${workout.title}" sélectionnée ! Ramez dès maintenant pour démarrer automatiquement (portrait ou paysage).',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showConfigureTemplateModal(context, prog, tpl);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: AppCards.tagDecoration(),
+                          child: Icon(
+                            _templateIcon(tpl),
+                            size: 19,
+                            color: AppColors.rosePastel,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                tpl.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                tpl.subtitle,
+                                style: TextStyle(
+                                  color: AppColors.rosePastel,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                tpl.benefit,
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textMuted,
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text(
-                'Démarrer cette séance',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
               ),
             ),
           ],
@@ -558,77 +786,51 @@ class _ProgramScreenState extends State<ProgramScreen> {
     );
   }
 
-  Widget _buildModalBadge(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.level1,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: AppColors.rose),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+  void _showEditWorkoutModal(
+    BuildContext context,
+    TrainingProgram prog,
+    int workoutIndex,
+    Workout workout,
+  ) {
+    final titleCtrl = TextEditingController(
+      text: _cleanWorkoutTitle(workout.title),
     );
-  }
+    final steps = workout.steps.map((s) => s.copyWith()).toList();
 
-  // --- Modal de création / modification simplifié de programme ---
-
-  void _showProgramEditorModal(
-    BuildContext context, {
-    TrainingProgram? existing,
-  }) {
-    final user = widget.appState.activeUser;
-    WorkoutGoal selectedGoal = existing?.goal ?? user.goal;
-    int selectedWeeks = existing?.weeksCount ?? 4;
-    int selectedSessionsPerWeek = existing?.sessionsPerWeek ?? 3;
-    List<int> selectedDays =
-        List<int>.from(existing?.trainingDays ?? const [1, 3, 5]);
-    String selectedTime = existing?.trainingTime ?? '18:30';
-    bool notificationsEnabled =
-        existing?.notificationsEnabled ?? widget.appState.notificationsEnabled;
-    bool isSaving = false;
-
-    const allWeekdays = [1, 2, 3, 4, 5, 6, 7];
-    const presetTimes = ['07:00', '08:30', '12:30', '18:00', '18:30', '19:30'];
-
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.level0,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
+          final totalSec =
+              steps.fold<int>(0, (sum, e) => sum + e.durationSeconds);
+
           return DraggableScrollableSheet(
             expand: false,
             initialChildSize: 0.85,
             maxChildSize: 0.94,
-            minChildSize: 0.6,
+            minChildSize: 0.55,
             builder: (context, scrollCtrl) => ListView(
               controller: scrollCtrl,
-              padding: const EdgeInsets.all(AppSpacing.cardPadding + 4),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                18,
+                20,
+                MediaQuery.viewInsetsOf(context).bottom + 24,
+              ),
               children: [
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        existing == null
-                            ? 'CRÉER UN PROGRAMME'
-                            : 'MODIFIER LE PROGRAMME',
-                        style: AppTypography.h1(fontSize: 22),
+                        'MODIFIER LA SÉANCE',
+                        style: AppTypography.h2(
+                          color: AppColors.textPrimary,
+                          fontSize: 19,
+                        ),
                       ),
                     ),
                     IconButton(
@@ -637,299 +839,213 @@ class _ProgramScreenState extends State<ProgramScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-
-                // 1. Objectif
-                DropdownButtonFormField<WorkoutGoal>(
-                  isExpanded: true,
-                  initialValue: selectedGoal,
+                const SizedBox(height: 12),
+                TextField(
+                  controller: titleCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Objectif du programme',
+                    labelText: 'Nom de la séance',
                   ),
-                  items: WorkoutGoal.values
-                      .map(
-                        (g) => DropdownMenuItem(
-                          value: g,
-                          child: Text(
-                            g.label,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null) setModalState(() => selectedGoal = v);
-                  },
                 ),
                 const SizedBox(height: 14),
-
-                // 2. Durée & Rythme
                 Row(
                   children: [
                     Expanded(
-                      child: DropdownButtonFormField<int>(
-                        isExpanded: true,
-                        initialValue: selectedWeeks,
-                        decoration: const InputDecoration(
-                          labelText: 'Durée',
-                        ),
-                        items: const [2, 4, 6, 8, 12]
-                            .map(
-                              (w) => DropdownMenuItem(
-                                value: w,
-                                child: Text('$w semaines'),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) setModalState(() => selectedWeeks = v);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        isExpanded: true,
-                        initialValue: selectedSessionsPerWeek,
-                        decoration: const InputDecoration(
-                          labelText: 'Séances/sem.',
-                        ),
-                        items: const [1, 2, 3, 4, 5, 6, 7]
-                            .map(
-                              (s) => DropdownMenuItem(
-                                value: s,
-                                child: Text('$s / sem.'),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) {
-                            setModalState(() => selectedSessionsPerWeek = v);
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-
-                // 3. Jours d'entraînement
-                Text(
-                  'JOURS D\'ENTRAÎNEMENT',
-                  style: AppTypography.h3(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: allWeekdays.map((day) {
-                    final isSelected = selectedDays.contains(day);
-                    return FilterChip(
-                      selectedColor: AppColors.rose.withValues(alpha: 0.25),
-                      checkmarkColor: AppColors.rose,
-                      label: Text(
-                        TrainingProgram.weekdayShortName(day),
-                        style: TextStyle(
-                          color: isSelected
-                              ? AppColors.rose
-                              : AppColors.textSecondary,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                      selected: isSelected,
-                      onSelected: (val) {
-                        setModalState(() {
-                          if (val) {
-                            selectedDays.add(day);
-                          } else if (selectedDays.length > 1) {
-                            selectedDays.remove(day);
-                          }
-                          selectedDays.sort();
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 18),
-
-                // 4. Heure de rappel
-                Text(
-                  'HEURE DU RAPPEL',
-                  style: AppTypography.h3(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ...presetTimes.map(
-                      (t) => ChoiceChip(
-                        selectedColor: AppColors.rose.withValues(alpha: 0.25),
-                        label: Text(
-                          t,
-                          style: TextStyle(
-                            color: selectedTime == t
-                                ? AppColors.rose
-                                : AppColors.textSecondary,
-                            fontWeight: selectedTime == t
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        selected: selectedTime == t,
-                        onSelected: (_) =>
-                            setModalState(() => selectedTime = t),
-                      ),
-                    ),
-                    ActionChip(
-                      avatar: const Icon(Icons.access_time, size: 16),
-                      label: Text('Autre ($selectedTime)'),
-                      onPressed: () async {
-                        final parts = selectedTime.split(':');
-                        final initial = TimeOfDay(
-                          hour: int.tryParse(parts[0]) ?? 18,
-                          minute: parts.length > 1
-                              ? (int.tryParse(parts[1]) ?? 30)
-                              : 30,
-                        );
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: initial,
-                        );
-                        if (picked != null) {
-                          setModalState(() {
-                            selectedTime =
-                                '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-                          });
-                        }
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-
-                // 5. Activation des notifications réelles
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.level1,
-                    borderRadius: BorderRadius.circular(AppSpacing.innerRadius),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        'Rappel de séance',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      subtitle: Text(
-                        'Notification sur votre téléphone à $selectedTime les jours programmés',
+                      child: Text(
+                        'BLOCS (${totalSec ~/ 60}m ${totalSec % 60}s • ${steps.length} blocs)',
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                      value: notificationsEnabled,
-                      onChanged: (v) =>
-                          setModalState(() => notificationsEnabled = v),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 22),
-
-                // 6. Validation du programme (utilise UNIQUEMENT les séances de l'app)
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.rose,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: isSaving
-                      ? null
-                      : () async {
-                          setModalState(() => isSaving = true);
-
-                          final catalog = widget.appState.workouts;
-                          final totalSessions =
-                              selectedWeeks * selectedSessionsPerWeek;
-                          final assignedWorkouts = <Workout>[];
-
-                          // Attribution des séances depuis l'onglet Séances types existant
-                          for (int i = 0; i < totalSessions; i++) {
-                            final w = catalog[i % catalog.length];
-                            assignedWorkouts.add(w);
-                          }
-
-                          final newProgram = TrainingProgram(
-                            id: existing?.id ??
-                                'prog_${DateTime.now().millisecondsSinceEpoch}',
-                            title: 'Programme ${selectedGoal.label}',
-                            description:
-                                'Programme de $selectedWeeks semaines ($selectedSessionsPerWeek séances/semaine).',
-                            userId: user.id,
-                            goal: selectedGoal,
-                            weeksCount: selectedWeeks,
-                            sessionsPerWeek: selectedSessionsPerWeek,
-                            trainingDays: selectedDays,
-                            trainingTime: selectedTime,
-                            notificationsEnabled: notificationsEnabled,
-                            isAiGenerated: false,
-                            workouts: assignedWorkouts,
-                            completedWorkoutIds: existing?.completedWorkoutIds ?? const [],
-                            createdAt: DateTime.now(),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () {
+                        setModalState(() {
+                          steps.add(
+                            WorkoutStep(
+                              id: 'step_${DateTime.now().microsecondsSinceEpoch}',
+                              title: 'Effort #${steps.length + 1}',
+                              type: StepType.work,
+                              durationSeconds: 60,
+                              targetResistance: 12,
+                              targetSpmMin: 24,
+                              targetSpmMax: 28,
+                            ),
                           );
-
-                          await widget.appState.saveProgram(newProgram);
-
-                          // Programmer des rappels de notifications réelles si activé
-                          if (notificationsEnabled) {
-                            try {
-                              final schedule = newProgram.buildSchedule();
-                              for (int i = 0; i < schedule.length && i < 10; i++) {
-                                final s = schedule[i];
-                                if (!s.isCompleted &&
-                                    s.scheduledDateTime.isAfter(DateTime.now())) {
-                                  await NotificationService.instance
-                                      .scheduleSessionReminder(
-                                    id: 200 + i,
-                                    scheduledDate: s.scheduledDateTime,
-                                    title: 'Rameur : C\'est l\'heure de votre séance !',
-                                    body: 'Séance prévue : "${s.workout.title}". Prêt à pagayer ?',
-                                  );
-                                }
-                              }
-                            } catch (_) {}
-                          }
-
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        },
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: Text(
-                    existing == null
-                        ? 'Créer le Programme'
-                        : 'Enregistrer les modifications',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
+                        });
+                      },
+                      icon: const Icon(Icons.add_circle_outline, size: 17),
+                      label: const Text('Ajouter un bloc'),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ...List.generate(steps.length, (idx) {
+                  final s = steps[idx];
+                  return Container(
+                    key: ValueKey(s.id),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: AppCards.subCardDecoration(radius: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButton<StepType>(
+                            value: s.type,
+                            isExpanded: true,
+                            isDense: true,
+                            underline: const SizedBox.shrink(),
+                            items: StepType.values
+                                .map(
+                                  (t) => DropdownMenuItem(
+                                    value: t,
+                                    child: Text(
+                                      t.label,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: stepTypeColor(t),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12.5,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() {
+                                  steps[idx] = s.copyWith(
+                                    type: v,
+                                    title: v.label,
+                                  );
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 76,
+                          child: TextFormField(
+                            initialValue: '${s.durationSeconds}',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Durée',
+                              labelStyle: TextStyle(fontSize: 11),
+                              suffixText: 's',
+                              suffixStyle: TextStyle(fontSize: 11),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 7,
+                              ),
+                            ),
+                            onChanged: (v) {
+                              final parsed = int.tryParse(v);
+                              if (parsed != null && parsed > 0) {
+                                setModalState(() {
+                                  steps[idx] = s.copyWith(
+                                    durationSeconds: parsed.clamp(1, 7200),
+                                  );
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 64,
+                          child: TextFormField(
+                            initialValue: '${s.targetResistance}',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.orange,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'SMR',
+                              labelStyle: TextStyle(fontSize: 11),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 7,
+                              ),
+                            ),
+                            onChanged: (v) {
+                              final parsed = int.tryParse(v);
+                              if (parsed != null && parsed >= 1) {
+                                setModalState(() {
+                                  steps[idx] = s.copyWith(
+                                    targetResistance: parsed.clamp(1, 24),
+                                  );
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        if (steps.length > 1) ...[
+                          const SizedBox(width: 2),
+                          IconButton(
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: AppColors.red,
+                            ),
+                            onPressed: () =>
+                                setModalState(() => steps.removeAt(idx)),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  style: AppButtons.primary(),
+                  onPressed: () async {
+                    final updatedWorkout = workout.copyWith(
+                      title: titleCtrl.text.trim().isEmpty
+                          ? _cleanWorkoutTitle(workout.title)
+                          : titleCtrl.text.trim(),
+                      steps: steps,
+                    );
+                    final updatedList = List<Workout>.from(prog.workouts);
+                    updatedList[workoutIndex] = updatedWorkout;
+                    await widget.appState.saveProgram(
+                      prog.copyWith(workouts: updatedList),
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.check),
+                  label: const Text(
+                    'Enregistrer les modifications',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -939,4 +1055,392 @@ class _ProgramScreenState extends State<ProgramScreen> {
       ),
     );
   }
+
+  void _showConfigureTemplateModal(
+    BuildContext context,
+    TrainingProgram prog,
+    WorkoutTemplateType template,
+  ) {
+    int durationMinutes = 25;
+    final durationCtrl = TextEditingController(text: '25');
+    String intensity = 'moderee';
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.viewInsetsOf(context).bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: AppCards.tagDecoration(),
+                    child: Icon(
+                      _templateIcon(template),
+                      color: AppColors.rosePastel,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          template.label,
+                          style: AppTypography.h2(
+                            color: AppColors.textPrimary,
+                            fontSize: 18,
+                          ),
+                        ),
+                        Text(
+                          template.subtitle,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'DURÉE (MINUTES)',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      children: [15, 20, 30, 45].map((m) {
+                        final selected = durationMinutes == m;
+                        return ChoiceChip(
+                          label: Text('$m min'),
+                          selected: selected,
+                          onSelected: (_) => setModalState(() {
+                            durationMinutes = m;
+                            durationCtrl.text = '$m';
+                          }),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 76,
+                    child: TextField(
+                      controller: durationCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      textAlign: TextAlign.center,
+                      decoration: const InputDecoration(
+                        suffixText: 'm',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 10,
+                        ),
+                      ),
+                      onChanged: (v) {
+                        final parsed = int.tryParse(v);
+                        if (parsed != null && parsed >= 5) {
+                          setModalState(
+                            () => durationMinutes = parsed.clamp(5, 120),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'COMPLEXITÉ / INTENSITÉ',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: const [
+                  ('douce', 'Douce'),
+                  ('moderee', 'Modérée'),
+                  ('intense', 'Intense'),
+                  ('maximale', 'Maximale'),
+                ].map((opt) {
+                  final selected = intensity == opt.$1;
+                  return ChoiceChip(
+                    label: Text(opt.$2),
+                    selected: selected,
+                    onSelected: (_) => setModalState(() => intensity = opt.$1),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 22),
+              FilledButton.icon(
+                style: AppButtons.primary(),
+                onPressed: () async {
+                  final workout = AiCoachService.buildWorkoutFromTemplate(
+                    template: template,
+                    durationMinutes: durationMinutes,
+                    intensity: intensity,
+                    user: widget.appState.activeUser,
+                    userHistory: widget.appState.sessions,
+                  );
+                  final updatedWorkouts = [...prog.workouts, workout];
+                  await widget.appState.saveProgram(
+                    prog.copyWith(workouts: updatedWorkouts),
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                icon: const Icon(Icons.add),
+                label: const Text(
+                  'Ajouter au programme',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCreateOrEditProgramModal(
+    BuildContext context, {
+    TrainingProgram? existing,
+  }) {
+    final nameCtrl = TextEditingController(
+      text: existing?.title ?? 'Mon Programme',
+    );
+    final selectedDays = List<int>.from(existing?.trainingDays ?? [1, 3, 5]);
+    final timeParts = (existing?.trainingTime ?? '18:30').split(':');
+    TimeOfDay selectedTime = TimeOfDay(
+      hour: int.tryParse(timeParts[0]) ?? 18,
+      minute: int.tryParse(timeParts.length > 1 ? timeParts[1] : '30') ?? 30,
+    );
+    bool notifEnabled = existing?.notificationsEnabled ?? true;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final timeStr =
+              '${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}';
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              MediaQuery.viewInsetsOf(context).bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  existing == null
+                      ? 'NOUVEAU PROGRAMME'
+                      : 'PARAMÈTRES DU PROGRAMME',
+                  style: AppTypography.h2(
+                    color: AppColors.textPrimary,
+                    fontSize: 20,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Nom du programme',
+                    hintText: 'Ex: Remise en forme, Objectif 2000m...',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'JOURS D\'ENTRAÎNEMENT',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: List.generate(7, (idx) {
+                    final dayNum = idx + 1;
+                    final isSel = selectedDays.contains(dayNum);
+                    return FilterChip(
+                      label: Text(TrainingProgram.weekdayShortName(dayNum)),
+                      selected: isSel,
+                      onSelected: (val) {
+                        setModalState(() {
+                          if (val) {
+                            selectedDays.add(dayNum);
+                            selectedDays.sort();
+                          } else if (selectedDays.length > 1) {
+                            selectedDays.remove(dayNum);
+                          }
+                        });
+                      },
+                    );
+                  }),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: selectedTime,
+                          );
+                          if (picked != null) {
+                            setModalState(() => selectedTime = picked);
+                          }
+                        },
+                        icon: const Icon(Icons.schedule_rounded, size: 18),
+                        label: Text('Heure : $timeStr'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Row(
+                      children: [
+                        const Text('Rappels', style: TextStyle(fontSize: 13)),
+                        Switch(
+                          value: notifEnabled,
+                          onChanged: (v) =>
+                              setModalState(() => notifEnabled = v),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  style: AppButtons.primary(),
+                  onPressed: () async {
+                    final title = nameCtrl.text.trim().isEmpty
+                        ? 'Mon Programme'
+                        : nameCtrl.text.trim();
+                    final days = List<int>.from(selectedDays)..sort();
+
+                    final program = existing != null
+                        ? existing.copyWith(
+                            title: title,
+                            trainingDays: days,
+                            sessionsPerWeek: days.length,
+                            trainingTime: timeStr,
+                            notificationsEnabled: notifEnabled,
+                          )
+                        : TrainingProgram(
+                            id: 'prog_${DateTime.now().millisecondsSinceEpoch}',
+                            title: title,
+                            description: 'Programme personnalisé',
+                            userId: widget.appState.activeUser.id,
+                            weeksCount: 4,
+                            sessionsPerWeek: days.length,
+                            trainingDays: days,
+                            trainingTime: timeStr,
+                            notificationsEnabled: notifEnabled,
+                            isAiGenerated: false,
+                            workouts: const [],
+                            createdAt: DateTime.now(),
+                          );
+
+                    await widget.appState.saveProgram(program);
+                    await NotificationService.instance.cancelAll();
+                    if (program.notificationsEnabled) {
+                      final next = program.nextScheduledSession;
+                      if (next != null) {
+                        await NotificationService.instance
+                            .scheduleSessionReminder(
+                          id: 1001,
+                          scheduledDate: next.scheduledDateTime,
+                          title: 'Séance Rameur • ${program.title}',
+                          body: 'C\'est l\'heure : ${next.workout.title}',
+                        );
+                      }
+                    }
+
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (existing == null && mounted) {
+                      setState(() => _openedProgramId = program.id);
+                    }
+                  },
+                  child: Text(
+                    existing == null ? 'Créer et ajouter des séances' : 'Enregistrer',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _formatSessionDate(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(dt.year, dt.month, dt.day);
+    final diff = d.difference(today).inDays;
+    final hhmm =
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+    if (diff == 0) return "Aujourd'hui • $hhmm";
+    if (diff == 1) return 'Demain • $hhmm';
+    final dayLabel = DateFormat('EEE d MMM', 'fr_FR').format(dt);
+    return '$dayLabel • $hhmm';
+  }
+}
+
+IconData _templateIcon(WorkoutTemplateType tpl) {
+  return switch (tpl) {
+    WorkoutTemplateType.endurance => Icons.favorite_outline_rounded,
+    WorkoutTemplateType.tempo => Icons.speed_rounded,
+    WorkoutTemplateType.longIntervals => Icons.trending_up_rounded,
+    WorkoutTemplateType.hiit => Icons.bolt_rounded,
+    WorkoutTemplateType.pyramid => Icons.change_history_rounded,
+    WorkoutTemplateType.strength => Icons.fitness_center_rounded,
+    WorkoutTemplateType.timeTrial => Icons.timer_outlined,
+    WorkoutTemplateType.recovery => Icons.spa_outlined,
+  };
+}
+
+String _cleanWorkoutTitle(String title) {
+  return title.replaceFirst(RegExp(r'^S\d+\.\d+\s*•\s*'), '');
 }

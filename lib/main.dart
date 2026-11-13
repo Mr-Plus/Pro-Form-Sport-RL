@@ -10,7 +10,6 @@ import 'screens/program_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/sessions_history_screen.dart';
 import 'screens/user_profile_screen.dart';
-import 'screens/workouts_ai_screen.dart';
 import 'services/app_state_service.dart';
 import 'services/live_session_service.dart';
 import 'services/notification_service.dart';
@@ -257,13 +256,13 @@ class _MainShellPageState extends State<MainShellPage>
               _liveSession.clearWorkout();
             },
             onSessionSaved: () {
-              setState(() => _selectedIndex = 3);
-              _tabController.animateTo(3);
+              setState(() => _selectedIndex = 2);
+              _tabController.animateTo(2);
             },
           );
         }
 
-        // Pages du Menu bas (4 onglets : Accueil, Programme, Séance, Sessions)
+        // Pages du Menu bas (4 onglets : Accueil, Programmes, Historique, Profil)
         final screens = [
           HomeScreen(
             appState: widget.appState,
@@ -288,15 +287,15 @@ class _MainShellPageState extends State<MainShellPage>
           ),
           ProgramScreen(
             appState: widget.appState,
-            onSelectWorkoutForLandscape: _onSelectWorkout,
-          ),
-          WorkoutsAiScreen(
-            appState: widget.appState,
             selectedWorkoutForLandscape: _selectedWorkoutForLandscape,
-            onLaunchWorkout: _onSelectWorkout,
+            onSelectWorkoutForLandscape: _onSelectWorkout,
           ),
           SessionsHistoryScreen(
             appState: widget.appState,
+          ),
+          UserProfileScreen(
+            appState: widget.appState,
+            embeddedInTab: true,
           ),
         ];
 
@@ -308,33 +307,19 @@ class _MainShellPageState extends State<MainShellPage>
             elevation: 0,
             scrolledUnderElevation: 0,
             automaticallyImplyLeading: false,
-            titleSpacing: 8,
+            titleSpacing: AppSpacing.pageHorizontal,
             toolbarHeight: 64,
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.rose,
-                  ),
-                  child: Icon(
-                    Icons.rowing_rounded,
-                    color: AppColors.level0,
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Rameur',
-                  style: AppTypography.h1(
-                    fontSize: 19,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-              ],
+            title: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Rameur',
+                style: AppTypography.h1(
+                  color: AppColors.rose,
+                  fontSize: 28,
+                  letterSpacing: 1.0,
+                ).copyWith(height: 1.0),
+              ),
             ),
             actions: [
               // Header Icon : Rower BLE
@@ -430,39 +415,6 @@ class _MainShellPageState extends State<MainShellPage>
               ),
               const SizedBox(width: 4),
 
-              // Header Icon : User Avatar
-              IconButton(
-                tooltip: 'Profil utilisateur',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                icon: Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppColors.level1,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.person_outline_rounded,
-                    size: 19,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => UserProfileScreen(
-                        appState: widget.appState,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 4),
-
               // Header Icon : Settings
               IconButton(
                 tooltip: 'Paramètres',
@@ -536,15 +488,15 @@ class _MainShellPageState extends State<MainShellPage>
                         glowColor: AppColors.rose,
                       ),
                       GlassTab(
-                        icon: const Icon(Icons.rowing_rounded),
-                        activeIcon: const Icon(Icons.rowing_rounded),
-                        label: 'Séance',
-                        glowColor: AppColors.rose,
-                      ),
-                      GlassTab(
                         icon: const Icon(CupertinoIcons.clock),
                         activeIcon: const Icon(CupertinoIcons.clock_fill),
                         label: 'Historique',
+                        glowColor: AppColors.rose,
+                      ),
+                      GlassTab(
+                        icon: const Icon(CupertinoIcons.person),
+                        activeIcon: const Icon(CupertinoIcons.person_fill),
+                        label: 'Profil',
                         glowColor: AppColors.rose,
                       ),
                     ],
@@ -704,12 +656,9 @@ class _MainShellPageState extends State<MainShellPage>
               style: TextStyle(color: AppColors.textMuted),
             ),
           ),
-          ElevatedButton(
+          FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.rose,
-              foregroundColor: Colors.white,
-            ),
+            style: AppButtons.compact(),
             child: const Text('Enregistrer'),
           ),
         ],

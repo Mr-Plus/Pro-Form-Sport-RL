@@ -68,10 +68,10 @@ class HomeScreen extends StatelessWidget {
                       children: [
                         const SizedBox(height: 6),
 
-                        // 1. En-tête : Salutation "Bonjour, Alex" & "Dépassez vos limites" (rose corail)
-                        _buildHeroHeadline(isRigorous),
+                        // 1. En-tête héroïque dynamique
+                        _buildHeroHeadline(isRigorous, nextSession),
 
-                        const SizedBox(height: 26),
+                        const SizedBox(height: 22),
 
                         // 2. Ligne 50% / 50% : Carte Programme (anneau néon) & Carte Prochaine session
                         _buildHalfCardsRow(prog, nextSession),
@@ -98,36 +98,195 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// Titre héroïque : "Bonjour, [Prénom]" puis "Dépasse tes limites" en rose corail
-  Widget _buildHeroHeadline(bool isRigorous) {
-    final userName = appState.activeUser.name.isNotEmpty
-        ? appState.activeUser.name
-        : 'Alex';
+  /// Bannière héroïque athlétique avec contexte utilisateur et accès rapide
+  Widget _buildHeroHeadline(
+    bool isRigorous,
+    ScheduledProgramSession? nextSession,
+  ) {
+    final user = appState.activeUser;
+    final userName = user.name.isNotEmpty ? user.name : 'Alex';
+    final hour = DateTime.now().hour;
+    final greeting = (hour >= 18 || hour < 5) ? 'Bonsoir' : 'Bonjour';
+    final isBleConnected = bleService.isHardwareConnected;
+    final sessionCount = appState.sessions.length;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Bonjour, $userName',
-          style: TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0.2,
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.rose.withValues(alpha: 0.24),
+            AppColors.level1,
+          ],
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Dépasse\ntes limites',
-          style: TextStyle(
-            color: AppColors.rosePastel,
-            fontSize: 36,
-            fontWeight: FontWeight.w800,
-            height: 1.15,
-            letterSpacing: -0.6,
-          ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: AppColors.rose.withValues(alpha: 0.45),
+          width: 1.2,
         ),
-      ],
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.rose.withValues(alpha: 0.12),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -12,
+              top: -8,
+              child: Icon(
+                Icons.rowing_rounded,
+                size: 112,
+                color: AppColors.rosePastel.withValues(alpha: 0.08),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '$greeting, $userName',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (isBleConnected
+                                  ? AppColors.green
+                                  : AppColors.rose)
+                              .withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: (isBleConnected
+                                    ? AppColors.green
+                                    : AppColors.rose)
+                                .withValues(alpha: 0.45),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isBleConnected
+                                  ? Icons.bluetooth_connected_rounded
+                                  : Icons.bolt_rounded,
+                              size: 13,
+                              color: isBleConnected
+                                  ? AppColors.green
+                                  : AppColors.rosePastel,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isBleConnected
+                                  ? 'Rameur connecté'
+                                  : '$sessionCount séance${sessionCount > 1 ? 's' : ''}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: isBleConnected
+                                    ? AppColors.green
+                                    : AppColors.rosePastel,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'DÉPASSE TES LIMITES',
+                    style: AppTypography.h1(
+                      fontSize: 30,
+                      color: Colors.white,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${user.goal.label} • Niveau ${user.level.label}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.rosePastel,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (nextSession != null)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'À suivre : ${nextSession.workout.title}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        FilledButton.icon(
+                          style: AppButtons.compact(),
+                          onPressed: () =>
+                              onSelectWorkoutForLandscape(nextSession.workout),
+                          icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                          label: const Text('Démarrer'),
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.screen_rotation_rounded,
+                          size: 15,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Tournez le téléphone en paysage pour ramer',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -137,46 +296,47 @@ class HomeScreen extends StatelessWidget {
     ScheduledProgramSession? nextSession,
   ) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Carte 1 : Programme
         Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(24),
-            onTap: onGoToProgramTab,
-            child: Container(
-              height: 200,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.level1,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    blurRadius: 18,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'PROGRAMME',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.h1(fontSize: 22),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Programme',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(height: AppSpacing.headerGap),
+              InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: onGoToProgramTab,
+                child: Container(
+                  height: 175,
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.level1,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      width: 1.2,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  Center(
+                  child: Center(
                     child: SizedBox(
-                      width: 86,
-                      height: 86,
+                      width: 90,
+                      height: 90,
                       child: Stack(
                         fit: StackFit.expand,
                         alignment: Alignment.center,
@@ -203,114 +363,135 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Spacer(),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
         const SizedBox(width: 16),
 
         // Carte 2 : Prochaine session
         Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(24),
-            onTap: () {
-              if (nextSession != null) {
-                onSelectWorkoutForLandscape(nextSession.workout);
-              } else {
-                onGoToProgramTab();
-              }
-            },
-            child: Container(
-              height: 200,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.level1,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    blurRadius: 18,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'PROCHAINE SESSION',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.h1(fontSize: 22),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Prochaine\nsession',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2,
+              const SizedBox(height: AppSpacing.headerGap),
+              InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: () {
+                  if (nextSession != null) {
+                    onSelectWorkoutForLandscape(nextSession.workout);
+                  } else {
+                    onGoToProgramTab();
+                  }
+                },
+                child: Container(
+                  height: 175,
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.level1,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      width: 1.2,
                     ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        nextSession != null
-                            ? nextSession.weekdayLabel
-                            : 'Samedi',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          height: 1.15,
-                        ),
-                      ),
-                      Text(
-                        nextSession != null
-                            ? nextSession.trainingTime
-                            : '10:00',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          height: 1.15,
-                        ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
                       ),
                     ],
                   ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.rose.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppColors.rose.withValues(alpha: 0.45),
-                          width: 1,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (nextSession != null) ...[
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              nextSession.weekdayLabel,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                height: 1.15,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              nextSession.trainingTime,
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                height: 1.15,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      child: Text(
-                        nextSession?.workout.title ?? 'Accent',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.rosePastel,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.rose.withValues(alpha: 0.22),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.rose.withValues(alpha: 0.45),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              nextSession.workout.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.rosePastel,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                      ] else ...[
+                        Text(
+                          'Aucune séance prévue',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            style: AppButtons.compact(),
+                            onPressed: onGoToProgramTab,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Ajouter'),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ],
@@ -323,36 +504,32 @@ class HomeScreen extends StatelessWidget {
     required double totalKcal,
     required String timeStr,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      decoration: BoxDecoration(
-        color: AppColors.level1,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-          width: 1.2,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'BILAN GLOBAL',
+          style: AppTypography.h1(fontSize: 22),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Bilan Global',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+        const SizedBox(height: AppSpacing.headerGap),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          decoration: BoxDecoration(
+            color: AppColors.level1,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.08),
+              width: 1.2,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          const SizedBox(height: 18),
-          Row(
+          child: Row(
             children: [
               // Colonne 1 : Distance
               Expanded(
@@ -450,8 +627,8 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

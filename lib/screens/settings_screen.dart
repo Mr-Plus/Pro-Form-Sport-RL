@@ -160,10 +160,8 @@ class SettingsScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              style: FilledButton.styleFrom(
+              style: AppButtons.primary(
                 backgroundColor: isConnected ? AppColors.level2 : AppColors.rose,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
               ),
               onPressed: isConnecting
                   ? null
@@ -419,11 +417,7 @@ class SettingsScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.rose,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+                  style: AppButtons.primary(),
                   onPressed: () async {
                     final dump = bleService.getFormattedLogsForExport();
                     await Clipboard.setData(ClipboardData(text: dump));

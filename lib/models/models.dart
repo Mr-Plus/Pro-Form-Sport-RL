@@ -20,35 +20,39 @@ enum FitnessLevel {
 enum WorkoutGoal {
   endurance(
     'Cardio & Endurance',
-    'Souffle et foncier',
-    'Travail aérobie continu pour développer la capacité pulmonaire, le volume cardiaque et l\'endurance fondamentale sur la durée.',
-    '20 - 24 SPM',
-    'Niveau 6 à 12',
-    'Renforcement cardiovasculaire et endurance longue durée',
+    'Souffle et régularité',
+    'Ramer à un rythme confortable et régulier pour améliorer votre souffle, votre cœur et tenir plus longtemps sans vous épuiser.',
+    '20 - 24 coups/min',
+    'Niveau 6 à 12 / 24',
+    'Meilleur souffle et endurance au quotidien',
+    'Gardez une allure où vous pouvez encore parler : priorité au geste fluide.',
   ),
   hiitWeightLoss(
     'Brûle-Graisses (HIIT)',
-    'Fractionné & perte de poids',
-    'Alternance d\'intervalles à haute intensité et de récupération active pour maximiser la dépense calorique et l\'effet post-combustion (EPOC).',
-    '28 - 34 SPM',
-    'Niveau 10 à 18',
-    'Consommation calorique maximale et accélération du métabolisme',
+    'Alternance rapide & récup',
+    'Alterner des phases dynamiques plus rapides avec des pauses actives pour dépenser un maximum d\'énergie en moins de temps.',
+    '26 - 30 coups/min',
+    'Niveau 8 à 14 / 24',
+    'Dépense d\'énergie élevée en séance courte',
+    'Gardez une résistance modérée : pour aller vite en sécurité, on ne charge pas trop lourd.',
   ),
   powerStrength(
-    'Force & Explosivité',
-    'Haute résistance SMR & puissance',
-    'Efforts courts et intenses contre une forte résistance magnétique pour développer la puissance motrice des jambes, du dos et le pic de watts.',
-    '18 - 24 SPM',
-    'Niveau 16 à 24',
-    'Gain de puissance musculaire et explosivité motrice',
+    'Force & Tonus',
+    'Poussée puissante à rythme lent',
+    'Ramer lentement contre une résistance plus élevée pour renforcer les jambes, le dos et la sangle abdominale sans précipitation.',
+    '16 - 22 coups/min',
+    'Niveau 12 à 18 / 24',
+    'Jambes, dos et posture plus solides',
+    'Poussez fort avec les jambes à rythme lent et contrôlé, le dos bien droit.',
   ),
   recovery(
-    'Récupération Active',
-    'Technique fluide & basse intensité',
-    'Séance douce favorisant le drainage lactique, la mobilité articulaire, le relâchement musculaire et la précision du geste.',
-    '18 - 22 SPM',
-    'Niveau 1 à 6',
-    'Régénération musculaire et prévention des courbatures',
+    'Récupération & Technique',
+    'Séance douce et fluide',
+    'Ramer très tranquillement pour détendre les muscles, améliorer la souplesse et perfectionner votre mouvement sans fatigue.',
+    '16 - 20 coups/min',
+    'Niveau 1 à 5 / 24',
+    'Détente musculaire et maîtrise du geste',
+    'Décomposez le geste sans forcer : Jambes → Dos → Bras, puis Bras → Dos → Jambes.',
   );
 
   final String label;
@@ -57,6 +61,7 @@ enum WorkoutGoal {
   final String targetCadence;
   final String targetResistance;
   final String keyBenefit;
+  final String beginnerTip;
 
   const WorkoutGoal(
     this.label,
@@ -65,7 +70,60 @@ enum WorkoutGoal {
     this.targetCadence,
     this.targetResistance,
     this.keyBenefit,
+    this.beginnerTip,
   );
+
+  /// Cadence recommandée (en coups de rame / min, aussi appelés SPM) adaptée au niveau.
+  String cadenceForLevel(FitnessLevel level) {
+    return switch (this) {
+      WorkoutGoal.endurance => switch (level) {
+          FitnessLevel.beginner => '18 - 22 coups/min',
+          FitnessLevel.intermediate => '20 - 24 coups/min',
+          FitnessLevel.advanced => '22 - 26 coups/min',
+        },
+      WorkoutGoal.hiitWeightLoss => switch (level) {
+          FitnessLevel.beginner => '24 - 28 coups/min',
+          FitnessLevel.intermediate => '26 - 30 coups/min',
+          FitnessLevel.advanced => '28 - 34 coups/min',
+        },
+      WorkoutGoal.powerStrength => switch (level) {
+          FitnessLevel.beginner => '16 - 20 coups/min',
+          FitnessLevel.intermediate => '18 - 22 coups/min',
+          FitnessLevel.advanced => '18 - 22 coups/min',
+        },
+      WorkoutGoal.recovery => switch (level) {
+          FitnessLevel.beginner => '16 - 20 coups/min',
+          FitnessLevel.intermediate => '18 - 20 coups/min',
+          FitnessLevel.advanced => '18 - 22 coups/min',
+        },
+    };
+  }
+
+  /// Plage de résistance SMR (1..24) adaptée au niveau pour rester sain et progressif.
+  String resistanceForLevel(FitnessLevel level) {
+    return switch (this) {
+      WorkoutGoal.endurance => switch (level) {
+          FitnessLevel.beginner => 'Niveau 4 à 8 (Modérée)',
+          FitnessLevel.intermediate => 'Niveau 6 à 12 (Modérée)',
+          FitnessLevel.advanced => 'Niveau 10 à 15 (Soutenue)',
+        },
+      WorkoutGoal.hiitWeightLoss => switch (level) {
+          FitnessLevel.beginner => 'Niveau 5 à 10 (Modérée)',
+          FitnessLevel.intermediate => 'Niveau 8 à 14 (Soutenue)',
+          FitnessLevel.advanced => 'Niveau 10 à 18 (Intense)',
+        },
+      WorkoutGoal.powerStrength => switch (level) {
+          FitnessLevel.beginner => 'Niveau 9 à 13 (Ferme)',
+          FitnessLevel.intermediate => 'Niveau 12 à 18 (Forte)',
+          FitnessLevel.advanced => 'Niveau 16 à 24 (Maximale)',
+        },
+      WorkoutGoal.recovery => switch (level) {
+          FitnessLevel.beginner => 'Niveau 1 à 4 (Très douce)',
+          FitnessLevel.intermediate => 'Niveau 1 à 5 (Douce)',
+          FitnessLevel.advanced => 'Niveau 2 à 6 (Douce)',
+        },
+    };
+  }
 
   static WorkoutGoal fromName(String? name) {
     return WorkoutGoal.values.firstWhere(
@@ -169,6 +227,54 @@ class UserProfile {
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
             DateTime.now(),
       );
+}
+
+enum WorkoutTemplateType {
+  endurance(
+    'Endurance fondamentale',
+    'Allure modérée et régulière (18–22 SPM)',
+    'Développe le cœur et l’endurance de base sans fatigue excessive. Idéal pour brûler les graisses et construire son fond de caisse.',
+  ),
+  tempo(
+    'Tempo / Seuil',
+    'Blocs longs à allure soutenue (22–26 SPM)',
+    'Habitue le corps à maintenir un rythme élevé plus longtemps en repoussant le seuil de fatigue musculaire.',
+  ),
+  longIntervals(
+    'Fractionné long',
+    'Intervalles de 2 à 5 min avec récup (26–30 SPM)',
+    'Améliore la VO2max et la puissance aérobie. Très efficace pour progresser rapidement sur des distances moyennes.',
+  ),
+  hiit(
+    'Fractionné court / HIIT',
+    'Sprints explosifs 30/30 ou Tabata (28–34 SPM)',
+    'Booste le métabolisme, l’explosivité et la dépense calorique en un minimum de temps.',
+  ),
+  pyramid(
+    'Pyramide',
+    'Montée puis descente de résistance et durée',
+    'Casse la monotonie tout en sollicitant progressivement l’endurance, la force puis le retour au calme.',
+  ),
+  strength(
+    'Force / Puissance',
+    'Basse cadence (16–20 SPM), forte résistance SMR',
+    'Renforce les jambes, le dos et le gainage grâce à des coups de rame lents et puissants contre une résistance élevée.',
+  ),
+  timeTrial(
+    'Contre-la-montre',
+    'Effort continu maximal de référence',
+    'Sert de test étalon pour mesurer votre niveau actuel et suivre vos progrès d’un mois sur l’autre.',
+  ),
+  recovery(
+    'Récupération / Technique',
+    'Séance douce (16–20 SPM) et relâchement',
+    'Favorise la récupération active entre deux grosses séances et permet de perfectionner le geste (jambes → dos → bras).',
+  );
+
+  final String label;
+  final String subtitle;
+  final String benefit;
+  const WorkoutTemplateType(this.label, this.subtitle, this.benefit);
 }
 
 enum StepType {
@@ -504,7 +610,8 @@ class TrainingProgram {
     for (int i = 0; i < workouts.length; i++) {
       final wk = workouts[i];
       final sessionUniqueKey = '${id}_s$i';
-      final isDone = completedWorkoutIds.contains(sessionUniqueKey);
+      final isDone = completedWorkoutIds.contains(wk.id) ||
+          completedWorkoutIds.contains(sessionUniqueKey);
 
       result.add(
         ScheduledProgramSession(

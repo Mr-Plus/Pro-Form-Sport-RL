@@ -21,10 +21,20 @@ class SessionsHistoryScreen extends StatelessWidget {
         final sessions = appState.sessions;
 
         if (sessions.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Container(
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.pageHorizontal,
+              AppSpacing.pageTop,
+              AppSpacing.pageHorizontal,
+              95,
+            ),
+            children: [
+              Text(
+                'HISTORIQUE',
+                style: AppTypography.h1(fontSize: 22),
+              ),
+              const SizedBox(height: AppSpacing.headerGap),
+              Container(
                 padding: const EdgeInsets.all(32),
                 decoration: AppCards.cardDecoration(radius: AppSpacing.cardRadius),
                 child: Column(
@@ -56,15 +66,29 @@ class SessionsHistoryScreen extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
+            ],
           );
         }
 
         return ListView.builder(
-          padding: AppSpacing.page,
-          itemCount: sessions.length,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.pageHorizontal,
+            AppSpacing.pageTop,
+            AppSpacing.pageHorizontal,
+            95,
+          ),
+          itemCount: sessions.length + 1,
           itemBuilder: (context, index) {
-            final s = sessions[index];
+            if (index == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.headerGap),
+                child: Text(
+                  'HISTORIQUE',
+                  style: AppTypography.h1(fontSize: 22),
+                ),
+              );
+            }
+            final s = sessions[index - 1];
             final dateStr = DateFormat('dd/MM/yyyy • HH:mm').format(s.startedAt);
 
             return Container(

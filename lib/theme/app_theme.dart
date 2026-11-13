@@ -424,14 +424,16 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
+          backgroundColor: AppColors.rose,
+          foregroundColor: Colors.white,
           elevation: 0,
           shadowColor: Colors.transparent,
           textStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
         ),
       ),
@@ -485,6 +487,47 @@ class AppTheme {
         color: l2,
         thickness: 1,
         space: 1,
+      ),
+    );
+  }
+}
+
+/// Styles unifiés pour tous les boutons principaux (fond rose) de l'application.
+class AppButtons {
+  static const double radius = 14;
+
+  static ButtonStyle primary({Color? backgroundColor}) {
+    return FilledButton.styleFrom(
+      backgroundColor: backgroundColor ?? AppColors.rose,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      textStyle: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+
+  static ButtonStyle compact({Color? backgroundColor}) {
+    return FilledButton.styleFrom(
+      backgroundColor: backgroundColor ?? AppColors.rose,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      textStyle: const TextStyle(
+        fontSize: 13.5,
+        fontWeight: FontWeight.w700,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
       ),
     );
   }

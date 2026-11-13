@@ -5,10 +5,12 @@ import '../theme/app_theme.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final AppStateService appState;
+  final bool embeddedInTab;
 
   const UserProfileScreen({
     super.key,
     required this.appState,
+    this.embeddedInTab = false,
   });
 
   @override
@@ -20,6 +22,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   late TextEditingController _ageCtrl;
   late TextEditingController _heightCtrl;
   late TextEditingController _weightCtrl;
+  late FitnessLevel _selectedLevel;
   late WorkoutGoal _selectedGoal;
   String _selectedEmoji = '🚣';
 
@@ -31,6 +34,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     _ageCtrl = TextEditingController(text: '${user.age}');
     _heightCtrl = TextEditingController(text: '${user.heightCm}');
     _weightCtrl = TextEditingController(text: user.weightKg.toInt().toString());
+    _selectedLevel = user.level;
     _selectedGoal = user.goal;
     _selectedEmoji = user.avatarEmoji;
   }
@@ -57,6 +61,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       age: age,
       heightCm: height,
       weightKg: weight,
+      level: _selectedLevel,
       goal: _selectedGoal,
     );
     widget.appState.saveUserProfile(updated);
@@ -118,13 +123,55 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Sélectionnez l\'objectif adapté à vos attentes pour calibrer automatiquement vos programmes et séances IA.',
+                  'Valeurs calibrées pour votre niveau (${_selectedLevel.label}). Vous pouvez ajuster votre niveau à tout moment.',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.pastelSlateBlue,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.health_and_safety_outlined,
+                              size: 16, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Comprendre Cadence (SPM) & Résistance',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '• SPM = coups de rame par minute (votre rythme).\n'
+                        '• Résistance (1 à 24) = la dureté du tirage.\n'
+                        '• Règle santé : ne combinez jamais résistance maximale et cadence rapide. Plus c\'est lourd, plus on rame lentement.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: AppColors.textPrimary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
                 ...WorkoutGoal.values.map((g) {
                   final isSelected = g == _selectedGoal;
                   return Padding(
@@ -217,14 +264,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 _buildGoalBadge(
                                   icon: Icons.speed,
                                   label: 'Cadence',
-                                  value: g.targetCadence,
+                                  value: g.cadenceForLevel(_selectedLevel),
                                   bgColor: AppColors.pastelSage,
                                   textColor: AppColors.green,
                                 ),
                                 _buildGoalBadge(
                                   icon: Icons.tune,
                                   label: 'Résistance',
-                                  value: g.targetResistance,
+                                  value: g.resistanceForLevel(_selectedLevel),
                                   bgColor: AppColors.pastelSand,
                                   textColor: AppColors.orange,
                                 ),
@@ -233,12 +280,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                Icon(Icons.stars,
+                                Icon(Icons.tips_and_updates_outlined,
                                     size: 13, color: AppColors.amber),
                                 const SizedBox(width: 5),
                                 Expanded(
                                   child: Text(
-                                    g.keyBenefit,
+                                    g.beginnerTip,
                                     style: TextStyle(
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w600,
@@ -304,6 +351,43 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  Widget _buildSoberTarget({
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.level0,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFieldLabel(String label, {IconData? icon, Widget? trailing}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -343,35 +427,27 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     AppColors.isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      backgroundColor: AppColors.level0,
-      appBar: AppBar(
-        title: Text(
-          'Profil Utilisateur',
-          style: AppTypography.bebasTitle(fontSize: 24),
-        ),
+    final content = ListView(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.pageHorizontal,
+        AppSpacing.pageTop,
+        AppSpacing.pageHorizontal,
+        widget.embeddedInTab ? 95 : AppSpacing.pageBottom,
       ),
-      body: ListView(
-        padding: AppSpacing.page,
-        children: [
+      children: [
           // Section 1 : Informations Personnelles
+          Text(
+            'INFORMATIONS PERSONNELLES',
+            style: AppTypography.h1(fontSize: 22),
+          ),
+          const SizedBox(height: AppSpacing.headerGap),
           Container(
-            padding: const EdgeInsets.all(AppSpacing.cardPadding + 4),
+            padding: const EdgeInsets.all(AppSpacing.cardPadding),
             decoration: AppCards.cardDecoration(radius: AppSpacing.cardRadius),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'INFORMATIONS PERSONNELLES',
-                  style: AppTypography.bebasSection(
-                    color: AppColors.textSecondary,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 22),
-
-                // Pseudo
-                _buildFieldLabel('Pseudo', icon: Icons.person_outline),
+                _buildFieldLabel('Pseudo'),
                 TextField(
                   controller: _pseudoCtrl,
                   style: TextStyle(
@@ -382,42 +458,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   decoration: InputDecoration(
                     hintText: 'Votre prénom ou pseudo',
                     hintStyle: TextStyle(color: AppColors.textMuted),
-                    prefixIcon: Icon(Icons.person_outline,
-                        color: AppColors.textSecondary, size: 20),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 15),
+                        horizontal: 14, vertical: 13),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
-                // Âge
-                _buildFieldLabel('Âge', icon: Icons.cake_outlined),
-                TextField(
-                  controller: _ageCtrl,
-                  keyboardType: TextInputType.number,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14.5,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: '34',
-                    hintStyle: TextStyle(color: AppColors.textMuted),
-                    suffixText: 'ans',
-                    suffixStyle: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                    prefixIcon: Icon(Icons.cake_outlined,
-                        color: AppColors.textSecondary, size: 20),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 15),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Taille & Poids côte à côte
+                // Âge, Taille & Poids sur une ligne sobre
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -425,7 +472,37 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildFieldLabel('Taille', icon: Icons.height),
+                          _buildFieldLabel('Âge'),
+                          TextField(
+                            controller: _ageCtrl,
+                            keyboardType: TextInputType.number,
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.5,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '34',
+                              hintStyle: TextStyle(color: AppColors.textMuted),
+                              suffixText: 'ans',
+                              suffixStyle: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12.5,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildFieldLabel('Taille'),
                           TextField(
                             controller: _heightCtrl,
                             keyboardType: TextInputType.number,
@@ -440,25 +517,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               suffixText: 'cm',
                               suffixStyle: TextStyle(
                                 color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12.5,
                               ),
-                              prefixIcon: Icon(Icons.height,
-                                  color: AppColors.textSecondary, size: 20),
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 15),
+                                  horizontal: 12, vertical: 13),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildFieldLabel('Poids',
-                              icon: Icons.monitor_weight_outlined),
+                          _buildFieldLabel('Poids'),
                           TextField(
                             controller: _weightCtrl,
                             keyboardType: TextInputType.number,
@@ -473,13 +547,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               suffixText: 'kg',
                               suffixStyle: TextStyle(
                                 color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12.5,
                               ),
-                              prefixIcon: Icon(Icons.monitor_weight_outlined,
-                                  color: AppColors.textSecondary, size: 20),
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 15),
+                                  horizontal: 12, vertical: 13),
                             ),
                           ),
                         ],
@@ -493,57 +565,97 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           const SizedBox(height: AppSpacing.sectionGap),
 
           // Section 2 : Objectif Sportif
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'OBJECTIF SPORTIF',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.h1(fontSize: 22),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () => _showAllGoalsDialog(context),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.help_outline,
+                          size: 15, color: AppColors.rosePastel),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Guide des objectifs',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.rosePastel,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.headerGap),
           Container(
-            padding: const EdgeInsets.all(AppSpacing.cardPadding + 4),
+            padding: const EdgeInsets.all(AppSpacing.cardPadding),
             decoration: AppCards.cardDecoration(radius: AppSpacing.cardRadius),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'OBJECTIF SPORTIF',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bebasSection(
-                          color: AppColors.textSecondary,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    InkWell(
-                      onTap: () => _showAllGoalsDialog(context),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.info_outline,
-                                size: 15, color: AppColors.rose),
-                            const SizedBox(width: 5),
-                            Text(
-                              'Guide des objectifs',
+                _buildFieldLabel('Niveau'),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppColors.level0,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: FitnessLevel.values.map((lvl) {
+                      final selected = lvl == _selectedLevel;
+                      return Expanded(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(9),
+                          onTap: () => setState(() => _selectedLevel = lvl),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 9),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? AppColors.rose
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: Text(
+                              lvl.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.rose,
+                                fontSize: 12.5,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: selected
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      );
+                    }).toList(),
+                  ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
-                _buildFieldLabel('Objectif d\'entraînement',
-                    icon: Icons.track_changes),
+                _buildFieldLabel('Objectif'),
                 DropdownButtonFormField<WorkoutGoal>(
                   isExpanded: true,
                   initialValue: _selectedGoal,
@@ -552,23 +664,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
-                  decoration: InputDecoration(
-                    prefixIcon: Icon(Icons.track_changes,
-                        color: AppColors.textSecondary, size: 20),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 15),
+                  decoration: const InputDecoration(
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                   ),
                   items: WorkoutGoal.values
                       .map(
                         (g) => DropdownMenuItem(
                           value: g,
                           child: Text(
-                            '${g.label} (${g.subtitle})',
+                            g.label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              fontSize: 13.5,
+                              fontSize: 14,
                               color: AppColors.textPrimary,
                             ),
                           ),
@@ -579,110 +689,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     if (v != null) setState(() => _selectedGoal = v);
                   },
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
 
-                // Carte détaillée sur l'objectif sélectionné
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: AppCards.subCardDecoration(
-                    radius: AppSpacing.innerRadius,
+                Text(
+                  _selectedGoal.description,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.textSecondary,
+                    height: 1.45,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: AppCards.tagDecoration(color: AppColors.rose),
-                            child: Icon(
-                              _getGoalIcon(_selectedGoal),
-                              size: 20,
-                              color: AppColors.rosePastel,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _selectedGoal.label,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _selectedGoal.subtitle,
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSoberTarget(
+                        label: 'Cadence cible',
+                        value: _selectedGoal.cadenceForLevel(_selectedLevel),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _selectedGoal.description,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textPrimary,
-                          height: 1.4,
-                        ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildSoberTarget(
+                        label: 'Résistance cible',
+                        value: _selectedGoal.resistanceForLevel(_selectedLevel),
                       ),
-                      const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 8,
-                        children: [
-                          _buildGoalBadge(
-                            icon: Icons.speed,
-                            label: 'Cadence',
-                            value: _selectedGoal.targetCadence,
-                            bgColor: AppColors.pastelSage,
-                            textColor: AppColors.green,
-                          ),
-                          _buildGoalBadge(
-                            icon: Icons.tune,
-                            label: 'Résistance',
-                            value: _selectedGoal.targetResistance,
-                            bgColor: AppColors.pastelSand,
-                            textColor: AppColors.orange,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.level0,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.stars,
-                                size: 15, color: AppColors.amber),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _selectedGoal.keyBenefit,
-                                style: const TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -692,29 +725,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           // Bouton Enregistrer
           SizedBox(
             width: double.infinity,
-            height: 54,
             child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.rose,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
+              style: AppButtons.primary(),
               onPressed: _saveProfile,
-              icon: const Icon(Icons.check, size: 20),
-              label: const Text(
-                'Enregistrer les modifications',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15.5,
-                ),
-              ),
+              icon: const Icon(Icons.check, size: 19),
+              label: const Text('Enregistrer les modifications'),
             ),
           ),
         ],
+      );
+    if (widget.embeddedInTab) return content;
+    return Scaffold(
+      backgroundColor: AppColors.level0,
+      appBar: AppBar(
+        title: Text(
+          'Profil Utilisateur',
+          style: AppTypography.bebasTitle(fontSize: 24),
+        ),
       ),
+      body: content,
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/models.dart';
 import '../services/ai_coach_service.dart';
 import '../services/app_state_service.dart';
@@ -910,113 +911,140 @@ class _WorkoutsAiScreenState extends State<WorkoutsAiScreen> {
                 ...List.generate(steps.length, (idx) {
                   final s = steps[idx];
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: AppCards.subCardDecoration(radius: 14),
-                    child: Column(
+                    key: ValueKey(s.id),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: AppCards.subCardDecoration(radius: 10),
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            DropdownButton<StepType>(
-                              value: s.type,
-                              underline: const SizedBox.shrink(),
-                              items: StepType.values
-                                  .map(
-                                    (t) => DropdownMenuItem(
-                                      value: t,
-                                      child: Text(
-                                        t.label,
-                                        style: TextStyle(
-                                          color: stepTypeColor(t),
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                        ),
+                        Expanded(
+                          child: DropdownButton<StepType>(
+                            value: s.type,
+                            isExpanded: true,
+                            isDense: true,
+                            underline: const SizedBox.shrink(),
+                            items: StepType.values
+                                .map(
+                                  (t) => DropdownMenuItem(
+                                    value: t,
+                                    child: Text(
+                                      t.label,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: stepTypeColor(t),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12.5,
                                       ),
                                     ),
-                                  )
-                                  .toList(),
-                              onChanged: (v) {
-                                if (v != null) {
-                                  setModalState(() {
-                                    steps[idx] = s.copyWith(
-                                      type: v,
-                                      title: v.label,
-                                    );
-                                  });
-                                }
-                              },
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Durée: ${s.durationSeconds}s • SMR ${s.targetResistance}/24',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                            if (steps.length > 1)
-                              IconButton(
-                                icon: Icon(
-                                  Icons.delete_outline,
-                                  size: 18,
-                                  color: AppColors.red,
-                                ),
-                                onPressed: () =>
-                                    setModalState(() => steps.removeAt(idx)),
-                              ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            Text(
-                              'Durée :',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                            Expanded(
-                              child: Slider(
-                                value: s.durationSeconds
-                                    .clamp(15, 600)
-                                    .toDouble(),
-                                min: 15,
-                                max: 600,
-                                divisions: 39,
-                                label: '${s.durationSeconds}s',
-                                onChanged: (v) => setModalState(() {
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() {
                                   steps[idx] = s.copyWith(
-                                    durationSeconds: (v ~/ 15) * 15,
+                                    type: v,
+                                    title: v.label,
                                   );
-                                }),
-                              ),
-                            ),
-                            Text(
-                              'SMR :',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                            Expanded(
-                              child: Slider(
-                                value: s.targetResistance.toDouble(),
-                                min: 1,
-                                max: 24,
-                                divisions: 23,
-                                activeColor: AppColors.orange,
-                                label: 'SMR ${s.targetResistance}',
-                                onChanged: (v) => setModalState(() {
-                                  steps[idx] = s.copyWith(
-                                    targetResistance: v.round(),
-                                  );
-                                }),
-                              ),
-                            ),
-                          ],
+                                });
+                              }
+                            },
+                          ),
                         ),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 76,
+                          child: TextFormField(
+                            initialValue: '${s.durationSeconds}',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Durée',
+                              labelStyle: TextStyle(fontSize: 11),
+                              suffixText: 's',
+                              suffixStyle: TextStyle(fontSize: 11),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 7,
+                              ),
+                            ),
+                            onChanged: (v) {
+                              final parsed = int.tryParse(v);
+                              if (parsed != null && parsed > 0) {
+                                setModalState(() {
+                                  steps[idx] = s.copyWith(
+                                    durationSeconds: parsed.clamp(1, 7200),
+                                  );
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 64,
+                          child: TextFormField(
+                            initialValue: '${s.targetResistance}',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.orange,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'SMR',
+                              labelStyle: TextStyle(fontSize: 11),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 7,
+                              ),
+                            ),
+                            onChanged: (v) {
+                              final parsed = int.tryParse(v);
+                              if (parsed != null && parsed >= 1) {
+                                setModalState(() {
+                                  steps[idx] = s.copyWith(
+                                    targetResistance: parsed.clamp(1, 24),
+                                  );
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        if (steps.length > 1) ...[
+                          const SizedBox(width: 2),
+                          IconButton(
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: AppColors.red,
+                            ),
+                            onPressed: () =>
+                                setModalState(() => steps.removeAt(idx)),
+                          ),
+                        ],
                       ],
                     ),
                   );

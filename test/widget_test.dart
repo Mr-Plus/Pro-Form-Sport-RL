@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:proform_rower_app/main.dart';
 import 'package:proform_rower_app/models/models.dart';
+import 'package:proform_rower_app/screens/home_screen.dart';
+import 'package:proform_rower_app/screens/sessions_history_screen.dart';
+import 'package:proform_rower_app/screens/user_profile_screen.dart';
 import 'package:proform_rower_app/services/ai_coach_service.dart';
 import 'package:proform_rower_app/services/app_state_service.dart';
 import 'package:proform_rower_app/services/live_session_service.dart';
@@ -349,10 +352,10 @@ void main() {
       // Titre de l'app 'Rameur'
       expect(find.text('Rameur'), findsOneWidget);
 
-      // Menu bas : Accueil, Programmes, Séance, Historique
+      // Menu bas : Accueil, Programmes, Profil, Historique
       expect(find.text('Accueil'), findsWidgets);
       expect(find.text('Programmes'), findsWidgets);
-      expect(find.text('Séance'), findsWidgets);
+      expect(find.text('Profil'), findsWidgets);
       expect(find.text('Historique'), findsWidgets);
 
       // Sur l'Accueil : phrase du coach avec pseudo, icône connexion dans l'appbar, graph du programme
@@ -363,26 +366,17 @@ void main() {
       // Onglet Programmes
       await tester.tap(find.text('Programmes').first);
       await tester.pumpAndSettle();
-      expect(find.text('PROGRAMME EN COURS'), findsOneWidget);
+      expect(find.text('MES PROGRAMMES'), findsOneWidget);
 
-      // Onglet Séance
-      await tester.tap(find.text('Séance').first);
+      // Onglet Profil
+      await tester.tap(find.text('Profil').first);
       await tester.pumpAndSettle();
-      expect(find.text('Séances types'), findsOneWidget);
-      expect(find.text('Création via IA'), findsOneWidget);
+      expect(find.text('INFORMATIONS PERSONNELLES'), findsOneWidget);
 
       // Onglet Historique
       await tester.tap(find.text('Historique').first, warnIfMissed: false);
       await tester.pumpAndSettle();
       expect(find.text('Aucune session enregistrée'), findsOneWidget);
-
-      // Clic sur l'icône Profil dans le Header
-      await tester.tap(find.byTooltip('Profil utilisateur'));
-      await tester.pumpAndSettle();
-      expect(find.text('Profil Utilisateur'), findsOneWidget);
-      expect(find.text('INFORMATIONS PERSONNELLES'), findsOneWidget);
-      await tester.tap(find.byType(BackButton));
-      await tester.pumpAndSettle();
 
       // Clic sur l'icône Paramètres dans le Header
       await tester.tap(find.byTooltip('Paramètres'));
@@ -773,6 +767,178 @@ void main() {
 
         liveSession.dispose();
         voiceCoach.dispose();
+      },
+    );
+  });
+
+  group('Ergonomie débutant & sécurité biomécanique cadence/résistance', () {
+    test(
+      'Un profil débutant reçoit des séances saines (HIIT <= 28 SPM, Force <= 13 SMR, jamais haute résistance + haute cadence)',
+      () async {
+        final beginner = UserProfile(
+          id: 'u_beg',
+          name: 'Alex',
+          weightKg: 70,
+          age: 32,
+          level: FitnessLevel.beginner,
+          goal: WorkoutGoal.powerStrength,
+          createdAt: DateTime(2025, 1, 1),
+        );
+
+        final strengthLocal = await AiCoachService.generateCustomWorkout(
+          user: beginner,
+          durationMinutes: 20,
+          intensity: 'moderee',
+          focusPrompt: 'Force',
+          userHistory: const [],
+        );
+        for (final step in strengthLocal.steps.where((s) => s.type == StepType.work)) {
+          expect(step.targetSpmMax, lessThanOrEqualTo(22));
+        }
+
+        final strengthTemplate = AiCoachService.buildWorkoutFromTemplate(
+          template: WorkoutTemplateType.strength,
+          durationMinutes: 20,
+          intensity: 'moderee',
+          user: beginner,
+        );
+        for (final step in strengthTemplate.steps.where((s) => s.type == StepType.work)) {
+          expect(step.targetResistance, lessThanOrEqualTo(13));
+          expect(step.targetSpmMax, lessThanOrEqualTo(20));
+        }
+
+        final hiitTemplate = AiCoachService.buildWorkoutFromTemplate(
+          template: WorkoutTemplateType.hiit,
+          durationMinutes: 20,
+          intensity: 'moderee',
+          user: beginner,
+        );
+        for (final step in hiitTemplate.steps.where((s) => s.type == StepType.work)) {
+          expect(step.targetSpmMax, lessThanOrEqualTo(28));
+        }
+
+        final advanced = beginner.copyWith(level: FitnessLevel.advanced);
+        final advPyramid = AiCoachService.buildWorkoutFromTemplate(
+          template: WorkoutTemplateType.pyramid,
+          durationMinutes: 25,
+          intensity: 'maximale',
+          user: advanced,
+        );
+        for (final step in advPyramid.steps.where((s) => s.type == StepType.work)) {
+          if (step.targetResistance >= 15) {
+            expect(step.targetSpmMax, lessThanOrEqualTo(22));
+          }
+        }
+      },
+    );
+
+    testWidgets(
+      'UserProfileScreen affiche le sélecteur de niveau et le guide Cadence (SPM) & Résistance',
+      (WidgetTester tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final appState = AppStateService();
+        await appState.init();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: UserProfileScreen(appState: appState),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Débutant'), findsOneWidget);
+        expect(find.text('Intermédiaire'), findsOneWidget);
+        expect(find.text('Avancé'), findsOneWidget);
+
+        await tester.tap(find.text('Débutant'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('18 - 22 coups/min'), findsNothing);
+        expect(find.text('24 - 28 coups/min'), findsOneWidget);
+
+        await tester.tap(find.text('Guide des objectifs'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('Comprendre Cadence (SPM) & Résistance'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'HomeScreen sans session prévue affiche + Ajouter (et pas de fausse session) et Historique affiche son titre',
+      (WidgetTester tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final appState = AppStateService();
+        await appState.init();
+        for (final p in List.of(appState.programs)) {
+          await appState.deleteProgram(p.id);
+        }
+        final fakeBle = _FakeBleService();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: HomeScreen(
+                appState: appState,
+                bleService: fakeBle,
+                selectedWorkoutForLandscape: null,
+                onSelectWorkoutForLandscape: (_) {},
+                onGoToProgramTab: () {},
+                onOpenSettings: () {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Samedi'), findsNothing);
+        expect(find.text('10:00'), findsNothing);
+        expect(find.text('Accent'), findsNothing);
+        expect(find.text('Aucune séance prévue'), findsOneWidget);
+        expect(find.text('Ajouter'), findsOneWidget);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SessionsHistoryScreen(appState: appState),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('HISTORIQUE'), findsOneWidget);
+      },
+    );
+
+    test(
+      'setActiveProgram change le programme actif sans modifier l\'ordre de la liste',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final appState = AppStateService();
+        await appState.init();
+
+        final second = TrainingProgram(
+          id: 'prog_second',
+          userId: appState.activeUser.id,
+          title: 'Second Programme',
+          description: 'Test',
+          weeksCount: 4,
+          sessionsPerWeek: 3,
+          workouts: const [],
+          createdAt: DateTime(2025, 1, 2),
+        );
+        await appState.saveProgram(second);
+
+        final orderBefore = appState.programs.map((p) => p.id).toList();
+        expect(orderBefore.length, greaterThanOrEqualTo(2));
+        final targetId = orderBefore.last;
+
+        await appState.setActiveProgram(targetId);
+
+        expect(appState.activeProgram?.id, targetId);
+        expect(appState.programs.map((p) => p.id).toList(), orderBefore);
       },
     );
   });

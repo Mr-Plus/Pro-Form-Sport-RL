@@ -7,6 +7,7 @@ class AppStateService extends ChangeNotifier {
   static const _kUsersKey = 'pf_sport_rl_users_v1';
   static const _kWorkoutsKey = 'pf_sport_rl_workouts_v1';
   static const _kProgramsKey = 'pf_sport_rl_programs_v1';
+  static const _kActiveProgramIdKey = 'pf_sport_rl_active_program_id_v1';
   static const _kSessionsKey = 'pf_sport_rl_sessions_v1';
   static const _kGeminiKey = 'pf_sport_rl_gemini_key_v1';
   static const _kThemeModeKey = 'pf_sport_rl_theme_mode_v1';
@@ -24,9 +25,17 @@ class AppStateService extends ChangeNotifier {
 
   List<TrainingProgram> _programs = [];
   List<TrainingProgram> get programs => List.unmodifiable(_programs);
+  String? _activeProgramId;
 
-  TrainingProgram? get activeProgram =>
-      _programs.isNotEmpty ? _programs.first : null;
+  TrainingProgram? get activeProgram {
+    if (_programs.isEmpty) return null;
+    if (_activeProgramId != null) {
+      for (final p in _programs) {
+        if (p.id == _activeProgramId) return p;
+      }
+    }
+    return _programs.first;
+  }
 
   List<RowingSession> _sessions = [];
   List<RowingSession> get sessions => List.unmodifiable(_sessions);
@@ -146,6 +155,7 @@ class AppStateService extends ChangeNotifier {
     if (_programs.isEmpty) {
       _programs = [_defaultProgram(_user, _workouts)];
     }
+    _activeProgramId = prefs?.getString(_kActiveProgramIdKey);
 
     // 4. Chargement des sessions
     final rawSessions = prefs?.getString(_kSessionsKey);
@@ -208,6 +218,11 @@ class AppStateService extends ChangeNotifier {
         _kProgramsKey,
         jsonEncode(_programs.map((p) => p.toJson()).toList()),
       );
+      if (_activeProgramId != null) {
+        await prefs.setString(_kActiveProgramIdKey, _activeProgramId!);
+      } else {
+        await prefs.remove(_kActiveProgramIdKey);
+      }
       await prefs.setString(
         _kSessionsKey,
         RowingSession.encodeList(_sessions),
@@ -300,18 +315,52 @@ class AppStateService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> toggleWorkoutCompletionInActiveProgram(String workoutId) async {
-    if (_programs.isEmpty) return;
-    final prog = _programs.first;
+  Future<void> setActiveProgram(String programId) async {
+    final idx = _programs.indexWhere((p) => p.id == programId);
+    if (idx < 0 || activeProgram?.id == programId) return;
+    _activeProgramId = programId;
+    _notificationsEnabled = _programs[idx].notificationsEnabled;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> deleteProgram(String programId) async {
+    _programs.removeWhere((p) => p.id == programId);
+    if (_activeProgramId == programId) {
+      _activeProgramId = _programs.isNotEmpty ? _programs.first.id : null;
+    }
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> toggleWorkoutCompletionInProgram(
+    String programId,
+    String workoutId, {
+    String? legacySessionKey,
+  }) async {
+    final idx = _programs.indexWhere((p) => p.id == programId);
+    if (idx < 0) return;
+    final prog = _programs[idx];
     final current = List<String>.from(prog.completedWorkoutIds);
-    if (current.contains(workoutId)) {
+    final hasWorkoutId = current.contains(workoutId);
+    final hasLegacy =
+        legacySessionKey != null && current.contains(legacySessionKey);
+
+    if (hasWorkoutId || hasLegacy) {
       current.remove(workoutId);
+      if (legacySessionKey != null) current.remove(legacySessionKey);
     } else {
       current.add(workoutId);
     }
-    _programs[0] = prog.copyWith(completedWorkoutIds: current);
+    _programs[idx] = prog.copyWith(completedWorkoutIds: current);
     await _persist();
     notifyListeners();
+  }
+
+  Future<void> toggleWorkoutCompletionInActiveProgram(String workoutId) async {
+    final active = activeProgram;
+    if (active == null) return;
+    await toggleWorkoutCompletionInProgram(active.id, workoutId);
   }
 
   // --- Gestion des Sessions ---
@@ -460,12 +509,10 @@ class AppStateService extends ChangeNotifier {
     final progWorkouts = <Workout>[];
     for (int i = 0; i < total; i++) {
       final template = baseWorkouts[i % baseWorkouts.length];
-      final wNum = (i ~/ sessionsPerWeek) + 1;
-      final sNum = (i % sessionsPerWeek) + 1;
       progWorkouts.add(
         Workout(
           id: 'prog_def_wk_${i + 1}',
-          title: 'S$wNum.$sNum • ${template.title}',
+          title: template.title,
           description: template.description,
           category: template.category,
           createdByUserId: user.id,
