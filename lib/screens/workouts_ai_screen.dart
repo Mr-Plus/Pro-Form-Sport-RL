@@ -591,6 +591,12 @@ class _WorkoutsAiScreenState extends State<WorkoutsAiScreen> {
 
   // --- CONSTRUCTEUR MANUEL DE SÉANCE TYPE ---
 
+  String _formatMinutesValue(int seconds) {
+    if (seconds % 60 == 0) return '${seconds ~/ 60}';
+    final s = (seconds / 60.0).toStringAsFixed(2);
+    return s.replaceFirst(RegExp(r'\.?0+$'), '');
+  }
+
   void _showCustomIntervalBuilderModal(
     BuildContext context, {
     Workout? initialWorkout,
@@ -926,6 +932,10 @@ class _WorkoutsAiScreenState extends State<WorkoutsAiScreen> {
                             isExpanded: true,
                             isDense: true,
                             underline: const SizedBox.shrink(),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                             items: StepType.values
                                 .map(
                                   (t) => DropdownMenuItem(
@@ -933,11 +943,14 @@ class _WorkoutsAiScreenState extends State<WorkoutsAiScreen> {
                                     child: Text(
                                       t.label,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: stepTypeColor(t),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12.5,
-                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: stepTypeColor(t),
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                          ),
                                     ),
                                   ),
                                 )
@@ -956,12 +969,17 @@ class _WorkoutsAiScreenState extends State<WorkoutsAiScreen> {
                         ),
                         const SizedBox(width: 6),
                         SizedBox(
-                          width: 76,
+                          width: 82,
                           child: TextFormField(
-                            initialValue: '${s.durationSeconds}',
-                            keyboardType: TextInputType.number,
+                            initialValue:
+                                _formatMinutesValue(s.durationSeconds),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[0-9.,]'),
+                              ),
                             ],
                             textAlign: TextAlign.right,
                             style: const TextStyle(
@@ -971,7 +989,7 @@ class _WorkoutsAiScreenState extends State<WorkoutsAiScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Durée',
                               labelStyle: TextStyle(fontSize: 11),
-                              suffixText: 's',
+                              suffixText: 'min',
                               suffixStyle: TextStyle(fontSize: 11),
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(
@@ -980,11 +998,13 @@ class _WorkoutsAiScreenState extends State<WorkoutsAiScreen> {
                               ),
                             ),
                             onChanged: (v) {
-                              final parsed = int.tryParse(v);
+                              final parsed =
+                                  double.tryParse(v.replaceAll(',', '.'));
                               if (parsed != null && parsed > 0) {
                                 setModalState(() {
                                   steps[idx] = s.copyWith(
-                                    durationSeconds: parsed.clamp(1, 7200),
+                                    durationSeconds:
+                                        (parsed * 60).round().clamp(1, 7200),
                                   );
                                 });
                               }
@@ -993,7 +1013,7 @@ class _WorkoutsAiScreenState extends State<WorkoutsAiScreen> {
                         ),
                         const SizedBox(width: 6),
                         SizedBox(
-                          width: 64,
+                          width: 84,
                           child: TextFormField(
                             initialValue: '${s.targetResistance}',
                             keyboardType: TextInputType.number,
@@ -1007,7 +1027,7 @@ class _WorkoutsAiScreenState extends State<WorkoutsAiScreen> {
                               color: AppColors.orange,
                             ),
                             decoration: const InputDecoration(
-                              labelText: 'SMR',
+                              labelText: 'Résistance',
                               labelStyle: TextStyle(fontSize: 11),
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(

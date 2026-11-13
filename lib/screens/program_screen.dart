@@ -122,9 +122,10 @@ class _ProgramScreenState extends State<ProgramScreen> {
                                     prog.title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.h2(
+                                    style: TextStyle(
                                       color: AppColors.textPrimary,
-                                      fontSize: 18,
+                                      fontSize: 15.5,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
@@ -277,66 +278,64 @@ class _ProgramScreenState extends State<ProgramScreen> {
               icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
             ),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    prog.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.h2(
-                      color: AppColors.textPrimary,
-                      fontSize: 19,
-                    ),
-                  ),
-                  Text(
-                    '${prog.progressPercent}% • ${prog.formattedDaysSummary} à ${prog.trainingTime}',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: 'Paramètres du programme',
-              visualDensity: VisualDensity.compact,
-              onPressed: () =>
-                  _showCreateOrEditProgramModal(context, existing: prog),
-              icon: const Icon(Icons.tune_rounded, size: 20),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        // Prochaine séance mise en avant
-        if (nextSession != null && !nextSession.isCompleted) ...[
-          _buildNextSessionBanner(context, nextSession),
-          const SizedBox(height: 16),
-        ],
-
-        // Calendrier des séances
-        Row(
-          children: [
-            Expanded(
               child: Text(
-                'CALENDRIER (${schedule.length} SÉANCES)',
-                style: AppTypography.bebasSection(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
+                prog.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.h2(
+                  color: AppColors.textPrimary,
+                  fontSize: 19,
                 ),
               ),
             ),
-            FilledButton.icon(
-              style: AppButtons.compact(),
-              onPressed: () => _showTemplatePickerSheet(context, prog),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Ajouter'),
-            ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 20),
+
+        // Planification
+        Text(
+          'PLANIFICATION',
+          style: AppTypography.bebasSection(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: AppCards.cardDecoration(radius: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${prog.formattedDaysSummary} à ${prog.trainingTime}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14.5,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Modifier la planification',
+                visualDensity: VisualDensity.compact,
+                onPressed: () =>
+                    _showCreateOrEditProgramModal(context, existing: prog),
+                icon: const Icon(Icons.tune_rounded, size: 20),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Calendrier des séances
+        Text(
+          'CALENDRIER (${schedule.length} SÉANCES)',
+          style: AppTypography.bebasSection(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
 
         if (schedule.isEmpty)
           Container(
@@ -355,7 +354,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Aucune séance planifiée.\nTouchez "+ Ajouter" pour choisir un modèle de séance.',
+                  'Aucune séance planifiée.\nTouchez "Ajouter une séance" ci-dessous pour choisir un modèle.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.textSecondary,
@@ -386,7 +385,20 @@ class _ProgramScreenState extends State<ProgramScreen> {
               );
             },
           ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: AppButtons.primary(),
+            onPressed: () => _showTemplatePickerSheet(context, prog),
+            icon: const Icon(Icons.add, size: 19),
+            label: const Text(
+              'Ajouter une séance',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
@@ -410,64 +422,6 @@ class _ProgramScreenState extends State<ProgramScreen> {
     );
   }
 
-  Widget _buildNextSessionBanner(
-    BuildContext context,
-    ScheduledProgramSession next,
-  ) {
-    final dateLabel = _formatSessionDate(next.scheduledDateTime);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: AppCards.cardDecoration(
-        radius: 16,
-        border: Border.all(
-          color: AppColors.rose.withValues(alpha: 0.7),
-          width: 1.4,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: AppCards.tagDecoration(),
-            child: Icon(
-              Icons.event_available_rounded,
-              color: AppColors.rosePastel,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'PROCHAINE SÉANCE',
-                  style: TextStyle(
-                    color: AppColors.rosePastel,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  dateLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildScheduledSessionRow(
     BuildContext context,
     TrainingProgram prog,
@@ -488,15 +442,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
       key: ValueKey('${wk.id}_$index'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: AppCards.subCardDecoration(
-        radius: 14,
-        border: isNext
-            ? Border.all(
-                color: AppColors.rose.withValues(alpha: 0.65),
-                width: 1.2,
-              )
-            : null,
-      ),
+      decoration: AppCards.subCardDecoration(radius: 14),
       child: Row(
         children: [
           ReorderableDragStartListener(
@@ -786,6 +732,12 @@ class _ProgramScreenState extends State<ProgramScreen> {
     );
   }
 
+  String _formatMinutesValue(int seconds) {
+    if (seconds % 60 == 0) return '${seconds ~/ 60}';
+    final s = (seconds / 60.0).toStringAsFixed(2);
+    return s.replaceFirst(RegExp(r'\.?0+$'), '');
+  }
+
   void _showEditWorkoutModal(
     BuildContext context,
     TrainingProgram prog,
@@ -902,6 +854,10 @@ class _ProgramScreenState extends State<ProgramScreen> {
                             isExpanded: true,
                             isDense: true,
                             underline: const SizedBox.shrink(),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                             items: StepType.values
                                 .map(
                                   (t) => DropdownMenuItem(
@@ -909,11 +865,14 @@ class _ProgramScreenState extends State<ProgramScreen> {
                                     child: Text(
                                       t.label,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: stepTypeColor(t),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12.5,
-                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: stepTypeColor(t),
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                          ),
                                     ),
                                   ),
                                 )
@@ -932,12 +891,17 @@ class _ProgramScreenState extends State<ProgramScreen> {
                         ),
                         const SizedBox(width: 6),
                         SizedBox(
-                          width: 76,
+                          width: 82,
                           child: TextFormField(
-                            initialValue: '${s.durationSeconds}',
-                            keyboardType: TextInputType.number,
+                            initialValue:
+                                _formatMinutesValue(s.durationSeconds),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[0-9.,]'),
+                              ),
                             ],
                             textAlign: TextAlign.right,
                             style: const TextStyle(
@@ -947,7 +911,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Durée',
                               labelStyle: TextStyle(fontSize: 11),
-                              suffixText: 's',
+                              suffixText: 'min',
                               suffixStyle: TextStyle(fontSize: 11),
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(
@@ -956,11 +920,13 @@ class _ProgramScreenState extends State<ProgramScreen> {
                               ),
                             ),
                             onChanged: (v) {
-                              final parsed = int.tryParse(v);
+                              final parsed =
+                                  double.tryParse(v.replaceAll(',', '.'));
                               if (parsed != null && parsed > 0) {
                                 setModalState(() {
                                   steps[idx] = s.copyWith(
-                                    durationSeconds: parsed.clamp(1, 7200),
+                                    durationSeconds:
+                                        (parsed * 60).round().clamp(1, 7200),
                                   );
                                 });
                               }
@@ -969,7 +935,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                         ),
                         const SizedBox(width: 6),
                         SizedBox(
-                          width: 64,
+                          width: 84,
                           child: TextFormField(
                             initialValue: '${s.targetResistance}',
                             keyboardType: TextInputType.number,
@@ -983,7 +949,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                               color: AppColors.orange,
                             ),
                             decoration: const InputDecoration(
-                              labelText: 'SMR',
+                              labelText: 'Résistance',
                               labelStyle: TextStyle(fontSize: 11),
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(

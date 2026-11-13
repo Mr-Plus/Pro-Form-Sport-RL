@@ -48,9 +48,10 @@ class SessionsHistoryScreen extends StatelessWidget {
                     const SizedBox(height: 18),
                     Text(
                       'Aucune session enregistrée',
-                      style: AppTypography.bebasCardTitle(
+                      style: TextStyle(
                         color: AppColors.textPrimary,
-                        fontSize: 22,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 10),
