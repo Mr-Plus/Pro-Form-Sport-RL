@@ -74,13 +74,105 @@ class ProFormRowerApp extends StatelessWidget {
             AppColors.isDark = true;
             return child ?? const SizedBox.shrink();
           },
-          home: MainShellPage(
-            appState: appState,
-            bleService: bleService,
-            voiceCoach: voiceCoach ?? VoiceCoachService(),
+          home: _SplashOverlay(
+            child: MainShellPage(
+              appState: appState,
+              bleService: bleService,
+              voiceCoach: voiceCoach ?? VoiceCoachService(),
+            ),
           ),
         );
       },
+    );
+  }
+}
+
+class _SplashOverlay extends StatefulWidget {
+  final Widget child;
+  const _SplashOverlay({required this.child});
+
+  @override
+  State<_SplashOverlay> createState() => _SplashOverlayState();
+}
+
+class _SplashOverlayState extends State<_SplashOverlay>
+    with SingleTickerProviderStateMixin {
+  static const _splashAsset = AssetImage('assets/splash_logo.png');
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  bool _done = false;
+  bool _started = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+    _opacity = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 72),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 28,
+      ),
+    ]).animate(_controller);
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _done = true);
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    // Wait until the splash image is decoded before starting the hold/fade timer.
+    precacheImage(_splashAsset, context).whenComplete(() {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_controller.isAnimating && !_done) {
+          _controller.forward();
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_done) return widget.child;
+    final logoSize = MediaQuery.sizeOf(context).shortestSide;
+    return Stack(
+      children: [
+        widget.child,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: FadeTransition(
+              opacity: _opacity,
+              child: ColoredBox(
+                color: const Color(0xFF0F1722),
+                child: Center(
+                  child: Image(
+                    image: _splashAsset,
+                    width: logoSize,
+                    height: logoSize,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
