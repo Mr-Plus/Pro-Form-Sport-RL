@@ -941,6 +941,125 @@ void main() {
         expect(appState.programs.map((p) => p.id).toList(), orderBefore);
       },
     );
+
+    test(
+      'LiveSessionService cumule distance et coups même si la console du rameur se remet à zéro',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final appState = AppStateService();
+        await appState.init();
+        final fakeBle = _FakeBleService();
+        final coach = VoiceCoachService();
+        final live = LiveSessionService(
+          appState: appState,
+          bleService: fakeBle,
+          voiceCoach: coach,
+        );
+
+        // Phase 1 : 1200 m, 110 coups, 300 s
+        fakeBle.pushTelemetry(
+          isConnected: true,
+          telemetry: RowerTelemetry(
+            cadenceSpm: 24,
+            powerWatts: 150,
+            distanceMeters: 1200,
+            strokesCount: 110,
+            elapsedSeconds: 300,
+          ),
+        );
+        expect(live.isRunning, isTrue);
+        expect(live.sessionDistanceMeters, 1200);
+        expect(live.sessionStrokesCount, 110);
+
+        // Phase 2 : la console se remet à zéro puis monte à 80 m / 8 coups
+        fakeBle.pushTelemetry(
+          isConnected: true,
+          telemetry: RowerTelemetry(
+            cadenceSpm: 26,
+            powerWatts: 165,
+            distanceMeters: 0,
+            strokesCount: 0,
+            elapsedSeconds: 0,
+          ),
+        );
+        fakeBle.pushTelemetry(
+          isConnected: true,
+          telemetry: RowerTelemetry(
+            cadenceSpm: 26,
+            powerWatts: 165,
+            distanceMeters: 80,
+            strokesCount: 8,
+            elapsedSeconds: 18,
+          ),
+        );
+
+        expect(live.sessionDistanceMeters, 1280);
+        expect(live.sessionStrokesCount, 118);
+
+        live.stopAndBuildSummary();
+        live.dispose();
+        fakeBle.dispose();
+      },
+    );
+
+    test(
+      'VoiceCoachService annonce un résumé toutes les 5 minutes avec le temps restant',
+      () {
+        final coach = VoiceCoachService();
+        final user = UserProfile(
+          id: 'u1',
+          name: 'Matthieu',
+          avatarEmoji: '🚣',
+          colorValue: 0xFF00E5FF,
+          weightKg: 78.0,
+          heightCm: 180,
+          age: 34,
+          maxHeartRate: 186,
+          level: FitnessLevel.intermediate,
+          goal: WorkoutGoal.endurance,
+          createdAt: DateTime.now(),
+        );
+        final workout = Workout(
+          id: 'wk_5min',
+          title: 'Endurance 20 min',
+          description: 'Test',
+          category: 'endurance',
+          createdByUserId: 'u1',
+          createdAt: DateTime.now(),
+          steps: const [
+            WorkoutStep(
+              id: 's1',
+              title: 'Endurance',
+              type: StepType.work,
+              durationSeconds: 1200,
+              targetResistance: 8,
+              targetSpmMin: 22,
+              targetSpmMax: 24,
+            ),
+          ],
+        );
+
+        coach.evaluateTick(
+          user: user,
+          telemetry: RowerTelemetry(
+            cadenceSpm: 23,
+            powerWatts: 140,
+          ),
+          sessionElapsedSec: 300,
+          sessionDistanceMeters: 1150,
+          samples: const [],
+          workout: workout,
+          currentStep: workout.steps.first,
+          nextStep: null,
+          stepElapsedSec: 300,
+          stepRemainingSec: 900,
+        );
+
+        expect(coach.lastMessage, contains('5 minutes'));
+        expect(coach.lastMessage, contains('1150 mètres'));
+        expect(coach.lastMessage, contains('15 minutes'));
+      },
+    );
   });
 }
 

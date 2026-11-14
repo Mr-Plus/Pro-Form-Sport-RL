@@ -415,11 +415,11 @@ class _LandscapeSessionScreenState extends State<LandscapeSessionScreen> {
               if (!live.isRunning)
                 widget.bleService.isHardwareConnected
                     ? Container(
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        height: 44,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
                           color: AppColors.green.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(19),
+                          borderRadius: BorderRadius.circular(22),
                           border: Border.all(
                             color: AppColors.green.withValues(alpha: 0.5),
                           ),
@@ -428,13 +428,13 @@ class _LandscapeSessionScreenState extends State<LandscapeSessionScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.rowing_rounded,
-                                size: 17, color: AppColors.green),
-                            const SizedBox(width: 6),
+                                size: 19, color: AppColors.green),
+                            const SizedBox(width: 7),
                             Text(
                               'Prêt — ramez pour démarrer',
                               style: TextStyle(
                                 color: AppColors.green,
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -442,34 +442,34 @@ class _LandscapeSessionScreenState extends State<LandscapeSessionScreen> {
                         ),
                       )
                     : SizedBox(
-                        height: 38,
+                        height: 46,
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.green,
                             side: BorderSide(
                               color: AppColors.green.withValues(alpha: 0.85),
-                              width: 1.6,
+                              width: 1.8,
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(19),
+                              borderRadius: BorderRadius.circular(23),
                             ),
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
                           ),
                           onPressed: () => live.startSession(auto: false),
-                          icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                          icon: const Icon(Icons.play_arrow_rounded, size: 24),
                           label: const Text(
                             'DÉMARRER',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 15,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: 0.6,
+                              letterSpacing: 0.7,
                             ),
                           ),
                         ),
                       )
               else ...[
                 SizedBox(
-                  height: 38,
+                  height: 46,
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor:
@@ -477,26 +477,26 @@ class _LandscapeSessionScreenState extends State<LandscapeSessionScreen> {
                       side: BorderSide(
                         color: (live.isPaused ? AppColors.amber : AppColors.rose)
                             .withValues(alpha: 0.85),
-                        width: 1.6,
+                        width: 1.8,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(19),
+                        borderRadius: BorderRadius.circular(23),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
                     ),
                     onPressed: live.togglePause,
                     icon: Icon(
                       live.isPaused
                           ? Icons.play_arrow_rounded
                           : Icons.pause_rounded,
-                      size: 18,
+                      size: 22,
                     ),
                     label: Text(
                       live.isPaused ? 'REPRENDRE' : 'PAUSE',
                       style: const TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
+                        letterSpacing: 0.6,
                       ),
                     ),
                   ),
@@ -687,10 +687,10 @@ class _MetricBox extends StatelessWidget {
                     if (icon != null) ...[
                       Icon(
                         icon,
-                        size: 13,
+                        size: 16,
                         color: isHighlighted ? accentColor : const Color(0xFF8A99AD),
                       ),
-                      const SizedBox(width: 5),
+                      const SizedBox(width: 6),
                     ],
                     Flexible(
                       child: Text(
@@ -698,9 +698,9 @@ class _MetricBox extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: isHighlighted ? accentColor : const Color(0xFF8A99AD),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.9,
                         ),
                       ),
                     ),
@@ -724,19 +724,17 @@ class _MetricBox extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.pause_circle_filled_rounded,
-                        size: 10,
+                        size: 11,
                         color: AppColors.amber,
                       ),
                       const SizedBox(width: 3),
                       Text(
-                        pauseDuration != null
-                            ? 'PAUSE $pauseDuration'
-                            : 'PAUSE',
+                        'PAUSE',
                         style: TextStyle(
                           color: AppColors.amber,
-                          fontSize: 9.5,
+                          fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
+                          letterSpacing: 0.4,
                         ),
                       ),
                     ],
@@ -751,48 +749,52 @@ class _MetricBox extends StatelessWidget {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
-                child: Row(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      value,
-                      style: TextStyle(
-                        fontFamily: isTime ? 'monospace' : null,
-                        fontSize: isTime ? 32 : 36,
-                        fontWeight: FontWeight.w900,
-                        color: isPaused && isTime
-                            ? AppColors.amber
-                            : isHighlighted
-                                ? accentColor
-                                : Colors.white,
-                        letterSpacing: isTime ? 1.0 : -0.5,
-                        height: 1.0,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          value,
+                          style: TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w900,
+                            color: isPaused && isTime
+                                ? AppColors.amber
+                                : isHighlighted
+                                    ? accentColor
+                                    : Colors.white,
+                            letterSpacing: -0.5,
+                            height: 1.0,
+                          ),
+                        ),
+                        if (unit.isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            unit,
+                            style: TextStyle(
+                              color: isHighlighted
+                                  ? accentColor.withValues(alpha: 0.85)
+                                  : const Color(0xFF8A99AD),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     if (isTime && isPaused && pauseDuration != null) ...[
-                      const SizedBox(width: 6),
+                      const SizedBox(height: 3),
                       Text(
-                        '(pause $pauseDuration)',
+                        'Pause : $pauseDuration',
                         style: TextStyle(
-                          fontFamily: 'monospace',
-                          color: AppColors.amber.withValues(alpha: 0.85),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                    if (unit.isNotEmpty) ...[
-                      const SizedBox(width: 4),
-                      Text(
-                        unit,
-                        style: TextStyle(
-                          color: isHighlighted
-                              ? accentColor.withValues(alpha: 0.85)
-                              : const Color(0xFF8A99AD),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          color: AppColors.amber.withValues(alpha: 0.9),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ],

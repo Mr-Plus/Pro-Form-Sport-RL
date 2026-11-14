@@ -75,6 +75,11 @@ class LiveSessionService extends ChangeNotifier {
   double _sessionCalories = 0.0;
   double _strokesAccumulator = 0.0;
 
+  double _lastConsoleDistanceMeters = 0.0;
+  int _lastConsoleStrokesCount = 0;
+  int _lastConsoleElapsedSeconds = 0;
+  bool _isConsoleCountdown = false;
+
   int _currentStepIndex = 0;
   int _stepElapsedSeconds = 0;
   DateTime? _startedAt;
@@ -140,30 +145,72 @@ class LiveSessionService extends ChangeNotifier {
   }
 
   /// Synchronise la durée, la distance et les coups avec les valeurs réelles de la console
-  /// (utile notamment lorsque la trame 01 12 arrive juste après l'auto-démarrage).
+  /// (utile notamment lorsque la trame 01 12 arrive juste après l'auto-démarrage,
+  /// ou lorsque la console se remet à zéro entre deux phases / en fin de minuteur).
   bool _syncFromTelemetry(RowerTelemetry tel) {
     bool changed = false;
-    if (tel.distanceMeters > _sessionDistanceMeters &&
-        tel.distanceMeters < 60000) {
-      _sessionDistanceMeters = tel.distanceMeters;
-      changed = true;
-    }
-    if (tel.strokesCount > _sessionStrokesCount && tel.strokesCount < 60000) {
-      _sessionStrokesCount = tel.strokesCount;
-      changed = true;
-    }
-    if (tel.elapsedSeconds > _sessionElapsedSeconds &&
-        tel.elapsedSeconds < 60000) {
-      final deltaSec = tel.elapsedSeconds - _sessionElapsedSeconds;
-      _sessionElapsedSeconds = tel.elapsedSeconds;
-      _startedAt =
-          DateTime.now().subtract(Duration(seconds: _sessionElapsedSeconds));
-      // Si la durée saute de > 2s (reprise d'une séance déjà commencée avant connexion),
-      // on calcule aussi les calories pour la partie déjà ramée de la séance.
-      if (deltaSec > 2) {
-        _backfillPreConnectionCalories(tel, deltaSec);
+    if (tel.distanceMeters >= 0 && tel.distanceMeters < 60000) {
+      if (tel.distanceMeters > _lastConsoleDistanceMeters) {
+        _sessionDistanceMeters +=
+            (tel.distanceMeters - _lastConsoleDistanceMeters);
+        _lastConsoleDistanceMeters = tel.distanceMeters;
+        changed = true;
+      } else if (tel.distanceMeters < _lastConsoleDistanceMeters &&
+          (tel.distanceMeters == 0 ||
+              tel.distanceMeters + 5 < _lastConsoleDistanceMeters)) {
+        // La console s'est remise à zéro : on conserve l'acquis et on cumule la suite.
+        _sessionDistanceMeters += tel.distanceMeters;
+        _lastConsoleDistanceMeters = tel.distanceMeters;
+        changed = true;
       }
-      changed = true;
+    }
+    if (tel.strokesCount >= 0 && tel.strokesCount < 60000) {
+      if (tel.strokesCount > _lastConsoleStrokesCount) {
+        _sessionStrokesCount += (tel.strokesCount - _lastConsoleStrokesCount);
+        _lastConsoleStrokesCount = tel.strokesCount;
+        changed = true;
+      } else if (tel.strokesCount < _lastConsoleStrokesCount &&
+          (tel.strokesCount == 0 ||
+              tel.strokesCount + 2 < _lastConsoleStrokesCount)) {
+        // La console s'est remise à zéro : on cumule les nouveaux coups.
+        _sessionStrokesCount += tel.strokesCount;
+        _lastConsoleStrokesCount = tel.strokesCount;
+        changed = true;
+      }
+    }
+    if (tel.elapsedSeconds >= 0 && tel.elapsedSeconds < 60000) {
+      if (tel.elapsedSeconds < _lastConsoleElapsedSeconds &&
+          _lastConsoleElapsedSeconds - tel.elapsedSeconds <= 5) {
+        // La console décompte à l'envers (mode minuteur) :
+        // on ignore la durée console et on laisse _onTick() compter en positif.
+        _isConsoleCountdown = true;
+        _lastConsoleElapsedSeconds = tel.elapsedSeconds;
+      } else if (tel.elapsedSeconds > _lastConsoleElapsedSeconds) {
+        final prevConsoleElapsed = _lastConsoleElapsedSeconds;
+        _lastConsoleElapsedSeconds = tel.elapsedSeconds;
+        final looksLikeCountdownJump = _isConsoleCountdown ||
+            (tel.elapsedSeconds > 15 &&
+                tel.distanceMeters < 50 &&
+                prevConsoleElapsed == 0);
+        if (looksLikeCountdownJump) {
+          _isConsoleCountdown = true;
+        } else if (tel.elapsedSeconds > _sessionElapsedSeconds) {
+          final deltaSec = tel.elapsedSeconds - _sessionElapsedSeconds;
+          _sessionElapsedSeconds = tel.elapsedSeconds;
+          _startedAt = DateTime.now()
+              .subtract(Duration(seconds: _sessionElapsedSeconds));
+          // Si la durée saute de > 2s (reprise d'une séance déjà commencée avant connexion),
+          // on calcule aussi les calories pour la partie déjà ramée de la séance.
+          if (deltaSec > 2) {
+            _backfillPreConnectionCalories(tel, deltaSec);
+          }
+          changed = true;
+        }
+      } else if (tel.elapsedSeconds == 0 ||
+          tel.elapsedSeconds + 5 < _lastConsoleElapsedSeconds) {
+        // Console remise à zéro : _onTick() continue d'incrémenter _sessionElapsedSeconds.
+        _lastConsoleElapsedSeconds = tel.elapsedSeconds;
+      }
     }
     return changed;
   }
@@ -198,15 +245,29 @@ class LiveSessionService extends ChangeNotifier {
     final tel = bleService.latestTelemetry;
 
     // Adopte directement les valeurs réelles déjà présentes sur la console du rameur
-    _sessionDistanceMeters =
+    final initDist =
         (tel.distanceMeters > 0 && tel.distanceMeters < 60000)
             ? tel.distanceMeters
             : 0.0;
-    _sessionStrokesCount =
+    final initStrokes =
         (tel.strokesCount > 0 && tel.strokesCount < 60000)
             ? tel.strokesCount
             : 0;
-    _sessionElapsedSeconds =
+    final looksLikeCountdown =
+        tel.elapsedSeconds > 15 && tel.distanceMeters < 50;
+    _isConsoleCountdown = looksLikeCountdown;
+    final initElapsed = (!looksLikeCountdown &&
+            tel.elapsedSeconds > 0 &&
+            tel.elapsedSeconds < 60000)
+        ? tel.elapsedSeconds
+        : 0;
+
+    _sessionDistanceMeters = initDist;
+    _lastConsoleDistanceMeters = initDist;
+    _sessionStrokesCount = initStrokes;
+    _lastConsoleStrokesCount = initStrokes;
+    _sessionElapsedSeconds = initElapsed;
+    _lastConsoleElapsedSeconds =
         (tel.elapsedSeconds > 0 && tel.elapsedSeconds < 60000)
             ? tel.elapsedSeconds
             : 0;
@@ -241,6 +302,18 @@ class LiveSessionService extends ChangeNotifier {
     notifyListeners();
   }
 
+  String _formatDurationText(int seconds) {
+    final s = seconds.clamp(0, 86400);
+    if (s >= 60) {
+      final m = s ~/ 60;
+      final rem = s % 60;
+      return rem > 0
+          ? '$m minute${m > 1 ? "s" : ""} et $rem seconde${rem > 1 ? "s" : ""}'
+          : '$m minute${m > 1 ? "s" : ""}';
+    }
+    return '$s seconde${s > 1 ? "s" : ""}';
+  }
+
   void pauseSession({bool auto = false}) {
     if (_isPaused || !_isRunning) return;
     _isPaused = true;
@@ -248,11 +321,29 @@ class LiveSessionService extends ChangeNotifier {
     _pauseElapsedSeconds = 0;
     notifyListeners();
 
-    voiceCoach.speak(
-      auto ? 'Rameur en pause.' : 'Séance en pause.',
-      type: CoachMessageType.info,
-      force: true,
-    );
+    final wk = _selectedWorkout;
+    if (auto) {
+      if (wk != null) {
+        final remSec =
+            (wk.totalDurationSeconds - _sessionElapsedSeconds).clamp(0, wk.totalDurationSeconds);
+        final msg = remSec > 0
+            ? 'Rameur en pause. Il ne te reste plus que ${_formatDurationText(remSec)}, reprends ton souffle et on repart !'
+            : 'Rameur en pause. La séance est terminée, tu peux t\'arrêter et enregistrer !';
+        voiceCoach.speak(msg, type: CoachMessageType.info, force: true);
+      } else {
+        voiceCoach.speak(
+          'Rameur en pause. Tu en es à ${_formatDurationText(_sessionElapsedSeconds)} et ${_sessionDistanceMeters.round()} mètres, reprends dès que tu es prêt !',
+          type: CoachMessageType.info,
+          force: true,
+        );
+      }
+    } else {
+      voiceCoach.speak(
+        'Séance en pause.',
+        type: CoachMessageType.info,
+        force: true,
+      );
+    }
   }
 
   void resumeSession({bool auto = false}) {
@@ -359,6 +450,11 @@ class LiveSessionService extends ChangeNotifier {
           );
           notifyListeners();
         } else {
+          voiceCoach.onWorkoutCompleted(
+            user: user,
+            distanceMeters: _sessionDistanceMeters,
+            elapsedSeconds: _sessionElapsedSeconds,
+          );
           notifyListeners();
           // La fin automatique de séance est gérée par l'UI si affichée, sinon reste prête à sauvegarder
         }

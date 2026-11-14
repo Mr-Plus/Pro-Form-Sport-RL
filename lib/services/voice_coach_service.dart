@@ -25,11 +25,14 @@ class VoiceCoachService extends ChangeNotifier {
 
   DateTime _lastFeedbackTime = DateTime.fromMillisecondsSinceEpoch(0);
   int _lowCadenceStreakSec = 0;
+  int _highCadenceStreakSec = 0;
   int _lowPowerStreakSec = 0;
   int _stoppedStreakSec = 0;
   int _onTargetStreakSec = 0;
   int _lastMilestoneHalfKm = 0;
+  int _lastSummaryFiveMin = 0;
   bool _halfwayAnnounced = false;
+  bool _workoutCompletedAnnounced = false;
   int _motivationVariant = 0;
   int _nameCalloutCount = 0;
 
@@ -75,11 +78,14 @@ class VoiceCoachService extends ChangeNotifier {
 
   void resetSessionState() {
     _lowCadenceStreakSec = 0;
+    _highCadenceStreakSec = 0;
     _lowPowerStreakSec = 0;
     _stoppedStreakSec = 0;
     _onTargetStreakSec = 0;
     _lastMilestoneHalfKm = 0;
+    _lastSummaryFiveMin = 0;
     _halfwayAnnounced = false;
+    _workoutCompletedAnnounced = false;
     _nameCalloutCount = 0;
     _lastFeedbackTime = DateTime.now();
   }
@@ -136,6 +142,7 @@ class VoiceCoachService extends ChangeNotifier {
     required int totalSteps,
   }) {
     _lowCadenceStreakSec = 0;
+    _highCadenceStreakSec = 0;
     _lowPowerStreakSec = 0;
     _stoppedStreakSec = 0;
     _onTargetStreakSec = 0;
@@ -174,6 +181,20 @@ class VoiceCoachService extends ChangeNotifier {
     }
   }
 
+  void onWorkoutCompleted({
+    required UserProfile user,
+    required double distanceMeters,
+    required int elapsedSeconds,
+  }) {
+    if (_workoutCompletedAnnounced) return;
+    _workoutCompletedAnnounced = true;
+    speak(
+      'Bravo ${user.name}, fin de séance ! Tu as bouclé le programme avec ${distanceMeters.round()} mètres. Tu peux ralentir et t\'arrêter maintenant !',
+      type: CoachMessageType.praise,
+      force: true,
+    );
+  }
+
   void onSessionFinished({
     required UserProfile user,
     required double distanceMeters,
@@ -201,6 +222,8 @@ class VoiceCoachService extends ChangeNotifier {
     required int stepElapsedSec,
     required int stepRemainingSec,
   }) {
+    if (_workoutCompletedAnnounced) return;
+
     // 1. Avertissement de changement de rythme imminent (Priorité Haute)
     if (currentStep != null) {
       if (stepRemainingSec == 10 && currentStep.durationSeconds >= 20) {
@@ -221,16 +244,28 @@ class VoiceCoachService extends ChangeNotifier {
           }
         } else {
           final nameTag = _shouldUseName() ? ' ${user.name}' : '';
-          speak(
-            'Dernières 10 secondes$nameTag ! Sprint final, vide le réservoir maintenant !',
-            type: CoachMessageType.transitionWarning,
-            force: true,
-          );
+          if (currentStep.type == StepType.rest ||
+              currentStep.type == StepType.cooldown) {
+            speak(
+              'Plus que 10 secondes de récupération$nameTag, relâche doucement, la séance est presque terminée !',
+              type: CoachMessageType.praise,
+              force: true,
+            );
+          } else {
+            speak(
+              'Dernières 10 secondes$nameTag ! Sprint final, vide le réservoir maintenant !',
+              type: CoachMessageType.transitionWarning,
+              force: true,
+            );
+          }
         }
         return;
       }
 
-      if (stepRemainingSec == 3 && currentStep.durationSeconds >= 15) {
+      if (stepRemainingSec == 3 &&
+          currentStep.durationSeconds >= 15 &&
+          nextStep != null &&
+          nextStep.type == StepType.work) {
         speak(
           '3, 2, 1, ENVOYEZ !',
           type: CoachMessageType.transitionWarning,
@@ -240,7 +275,44 @@ class VoiceCoachService extends ChangeNotifier {
       }
     }
 
-    // 2. Félicitations aux caps de distance tous les 500 mètres
+    // 2. Résumé périodique toutes les 5 minutes (où on en est + temps restant)
+    final fiveMinIndex = sessionElapsedSec ~/ 300;
+    if (fiveMinIndex > _lastSummaryFiveMin && sessionElapsedSec >= 300) {
+      _lastSummaryFiveMin = fiveMinIndex;
+      final elapsedMin = fiveMinIndex * 5;
+      final distMeters = sessionDistanceMeters.round();
+      final nameTag = _shouldUseName() ? ' ${user.name}' : '';
+      if (workout != null) {
+        final totalSec = workout.totalDurationSeconds;
+        final remSec = (totalSec - sessionElapsedSec).clamp(0, totalSec);
+        final String remText;
+        if (remSec >= 60) {
+          final rm = remSec ~/ 60;
+          final rs = remSec % 60;
+          remText = rs > 0
+              ? '$rm minute${rm > 1 ? "s" : ""} et $rs secondes'
+              : '$rm minute${rm > 1 ? "s" : ""}';
+        } else if (remSec > 0) {
+          remText = '$remSec secondes';
+        } else {
+          remText = 'quelques secondes';
+        }
+        speak(
+          'Point à $elapsedMin minutes$nameTag : $distMeters mètres parcourus, allure ${telemetry.formattedSplit500m} au 500. Il reste $remText, continue comme ça !',
+          type: CoachMessageType.info,
+          force: true,
+        );
+      } else {
+        speak(
+          'Point à $elapsedMin minutes$nameTag : $distMeters mètres parcourus, allure ${telemetry.formattedSplit500m} au 500. Beau rythme, lâche rien !',
+          type: CoachMessageType.info,
+          force: true,
+        );
+      }
+      return;
+    }
+
+    // 3. Félicitations aux caps de distance tous les 500 mètres
     final halfKmIndex = (sessionDistanceMeters ~/ 500);
     if (halfKmIndex > _lastMilestoneHalfKm && sessionDistanceMeters >= 500) {
       _lastMilestoneHalfKm = halfKmIndex;
@@ -297,22 +369,37 @@ class VoiceCoachService extends ChangeNotifier {
       _stoppedStreakSec = 0;
     }
 
-    // 5. Analyse pendant un bloc structuré (Coup de mou vs Félicitations)
+    // 5. Analyse pendant un bloc structuré (Fréquence / Cadence, Puissance & Félicitations)
     if (currentStep != null && !isRestOrCooldown) {
       if (spm > 0 && spm < currentStep.targetSpmMin - 2) {
         _lowCadenceStreakSec++;
+        _highCadenceStreakSec = 0;
         _onTargetStreakSec = 0;
         if (_lowCadenceStreakSec >= 5) {
           _lowCadenceStreakSec = 0;
           final nameTag = _shouldUseName() ? ' ${user.name}' : '';
           speak(
-            'Réveille la cadence$nameTag ! Tu es à $spm SPM, accélère les jambes pour remonter à ${currentStep.targetSpmMin} !',
+            'Réveille la cadence$nameTag ! Tu es à $spm SPM, accélère pour rentrer dans la cible ${currentStep.targetSpmMin} à ${currentStep.targetSpmMax} coups minute !',
             type: CoachMessageType.slumpAlert,
+          );
+          return;
+        }
+      } else if (spm > currentStep.targetSpmMax + 3) {
+        _highCadenceStreakSec++;
+        _lowCadenceStreakSec = 0;
+        _onTargetStreakSec = 0;
+        if (_highCadenceStreakSec >= 6) {
+          _highCadenceStreakSec = 0;
+          final nameTag = _shouldUseName() ? ' ${user.name}' : '';
+          speak(
+            'Cadence un peu élevée$nameTag à $spm SPM, cale-toi entre ${currentStep.targetSpmMin} et ${currentStep.targetSpmMax} coups minute !',
+            type: CoachMessageType.info,
           );
           return;
         }
       } else {
         _lowCadenceStreakSec = 0;
+        _highCadenceStreakSec = 0;
       }
 
       final targetW = currentStep.targetWatts;
@@ -335,7 +422,7 @@ class VoiceCoachService extends ChangeNotifier {
       final inSpmZone = spm >= currentStep.targetSpmMin &&
           spm <= currentStep.targetSpmMax + 3;
       final inWattsZone =
-          targetW == null ? watts >= 90 : watts >= (targetW * 0.92).round();
+          targetW == null ? true : watts >= (targetW * 0.92).round();
 
       if (inSpmZone && inWattsZone) {
         _onTargetStreakSec++;
@@ -345,11 +432,11 @@ class VoiceCoachService extends ChangeNotifier {
           final nameTag = _shouldUseName() ? ' ${user.name}' : '';
           final msg = switch (_motivationVariant) {
             0 =>
-              'Machine$nameTag ! $watts watts à $spm SPM, tu écrases la cible, continue !',
+              'Cadence parfaite$nameTag à $spm coups minute, tu es exactement dans la zone ${currentStep.targetSpmMin} à ${currentStep.targetSpmMax} !',
             1 =>
-              'Puissance de feu à $watts watts ! Gainage parfait, garde cet impact !',
+              'Fréquence nickel à $spm SPM et $watts watts, tu respectes parfaitement la consigne !',
             _ =>
-              'Superbe$nameTag ! $spm coups minute ultra propres, lâche rien !',
+              'Tu es pile dans la cadence convenue à $spm coups minute$nameTag, continue comme ça !',
           };
           speak(msg, type: CoachMessageType.praise);
           return;

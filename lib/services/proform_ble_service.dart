@@ -909,8 +909,9 @@ class ProFormBleService extends ChangeNotifier {
     if (decoded.isConsoleStrokesFrame && decoded.consoleStrokes != null) {
       final consoleElapsedSec = decoded.consoleStrokes!;
       if (consoleElapsedSec > 0 && consoleElapsedSec < 60000) {
-        // La trame 01 12 (octets 5-6) fournit la durée réelle écoulée en secondes sur la console.
-        final bool isTimeAdvancing = consoleElapsedSec > _telemetry.elapsedSeconds;
+        // La trame 01 12 (octets 5-6) fournit la durée (ou minuteur) sur la console.
+        final bool isTimeChanging =
+            consoleElapsedSec != _telemetry.elapsedSeconds;
         _addLog(
           '<< ${ProFormSportRLProtocol.toHex(bytes)} // Console Durée (01 12): ${consoleElapsedSec}s${decoded.isConsolePaused ? " (En pause)" : ""}',
         );
@@ -919,7 +920,7 @@ class ProFormBleService extends ChangeNotifier {
           rxPacketsCount: _rxPacketsCount,
           isConsolePaused: decoded.isConsolePaused
               ? true
-              : (isTimeAdvancing ? false : _telemetry.isConsolePaused),
+              : (isTimeChanging ? false : _telemetry.isConsolePaused),
         );
         notifyListeners();
       }
